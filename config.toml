@@ -18,6 +18,7 @@ Slack = "slack.sh"
 Zoom = "zoom.sh"
 
 [Gaming]
-Steam = "steam.sh"
-Lutris = "lutris.sh"
+GamingDependancies = "scripts/gamingdeps.sh"
+Steam = "scripts/steam.sh"
+Lutris = "scripts/lutris.sh"
 
