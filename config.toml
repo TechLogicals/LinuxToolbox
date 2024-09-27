@@ -1,3 +1,5 @@
+[Arch Install scripts]
+ArchInstall = "archinstall.sh"
 
 [Development]
 Git = "scripts/git.sh"
