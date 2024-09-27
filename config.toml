@@ -1,0 +1,23 @@
+
+[Development]
+Git = "scripts/git.sh"
+
+[Multimedia]
+VLC = "vlc.sh"
+GIMP = "gimp.sh"
+Audacity = "audacity.sh"
+
+[Utilities]
+htop = "htop.sh"
+neofetch = "neofetch.sh"
+tmux = "tmux.sh"
+
+[Communication]
+Discord = "discord.sh"
+Slack = "slack.sh"
+Zoom = "zoom.sh"
+
+[Gaming]
+Steam = "steam.sh"
+Lutris = "lutris.sh"
+
