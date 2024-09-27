@@ -1,6 +1,13 @@
 [Arch-Install-scripts]
 ArchInstall = "scripts/archinstall.sh"
 
+[Debian-Specfic-Scripts]
+DebianInstall = "scripts/debianinstall.sh"
+
+[Seedbox-Scripts]
+Seedbox-All = "scripts/seedboxall.sh"
+Docker-Seedbox = "scripts/dockerseedbox.sh"
+
 [Development]
 Git = "scripts/git.sh"
 

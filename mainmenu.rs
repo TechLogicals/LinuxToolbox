@@ -128,7 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(size);
 
             // Title bar
-            let title = Paragraph::new("Linux Toolbox 0.03 by Tech Logicals")
+            let title = Paragraph::new("Linux Toolbox 0.04 by Tech Logicals")
                 .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
                 .alignment(ratatui::layout::Alignment::Center)
                 .block(Block::default().borders(Borders::ALL));
