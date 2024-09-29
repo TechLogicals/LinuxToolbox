@@ -6,9 +6,10 @@ use std::os::unix::fs::PermissionsExt;
 use toml::Value;
 use ratatui::{
     backend::CrosstermBackend,
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
-    layout::{Layout, Constraint, Direction},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    layout::{Layout, Constraint, Direction, Alignment},
     style::{Color, Modifier, Style},
+    text::{Span, Spans},
     Terminal,
 };
 use crossterm::{
@@ -161,14 +162,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ].as_ref())
                 .split(size);
 
-            let mut title_text = format!("Linux Toolbox v{} by Tech Logicals", CURRENT_VERSION);
+            // Title bar
+            let mut title_text = vec![
+                Span::styled("Linux Toolbox ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("v{}", CURRENT_VERSION), Style::default().fg(Color::Yellow)),
+                Span::raw(" by "),
+                Span::styled("Tech Logicals", Style::default().fg(Color::Green).add_modifier(Modifier::ITALIC)),
+            ];
             if let Some(new_version) = &update_available {
-                title_text.push_str(&format!(" (Update v{} available)", new_version));
+                title_text.push(Span::raw(" ("));
+                title_text.push(Span::styled(format!("Update v{} available", new_version), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)));
+                title_text.push(Span::raw(")"));
             }
-            let title = Paragraph::new(title_text)
-                .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
-                .alignment(ratatui::layout::Alignment::Center)
-                .block(Block::default().borders(Borders::ALL));
+            let title = Paragraph::new(Spans::from(title_text))
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
             f.render_widget(title, chunks[0]);
 
             let main_chunks = Layout::default()
@@ -179,34 +187,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ].as_ref())
                 .split(chunks[1]);
 
+            // Categories
             let category_items: Vec<ListItem> = categories
                 .iter()
-                .map(|c| ListItem::new(c.name.clone()))
+                .map(|c| {
+                    ListItem::new(Spans::from(vec![
+                        Span::styled("• ", Style::default().fg(Color::Yellow)),
+                        Span::raw(c.name.clone()),
+                    ]))
+                })
                 .collect();
             let categories_list = List::new(category_items)
-                .block(Block::default().title("Categories").borders(Borders::ALL))
-                .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-                .highlight_symbol("> ");
+                .block(Block::default().title("Categories").borders(Borders::ALL).border_style(Style::default().fg(Color::Cyan)))
+                .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+                .highlight_symbol(">> ");
             f.render_stateful_widget(categories_list, main_chunks[0], &mut category_state);
 
+            // Programs
             let program_items: Vec<ListItem> = categories[selected_category]
                 .programs
                 .iter()
-                .map(|p| ListItem::new(p.name.clone()))
+                .map(|p| {
+                    ListItem::new(Spans::from(vec![
+                        Span::styled("▶ ", Style::default().fg(Color::Green)),
+                        Span::raw(p.name.clone()),
+                    ]))
+                })
                 .collect();
             let programs_list = List::new(program_items)
-                .block(Block::default().title("Programs").borders(Borders::ALL))
-                .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-                .highlight_symbol("> ");
+                .block(Block::default().title("Programs").borders(Borders::ALL).border_style(Style::default().fg(Color::Magenta)))
+                .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+                .highlight_symbol(">> ");
             f.render_stateful_widget(programs_list, main_chunks[1], &mut program_state);
 
+            // Help text
             let help_text = match menu_state {
                 MenuState::Categories => "↑↓: Navigate | Enter: Select | q: Quit",
                 MenuState::Programs => "↑↓: Navigate | Enter: Run | Esc/Backspace: Back | q: Quit",
             };
             let help_paragraph = Paragraph::new(help_text)
-                .style(Style::default().fg(Color::White))
-                .block(Block::default().borders(Borders::ALL));
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
             f.render_widget(help_paragraph, chunks[2]);
         })?;
 
