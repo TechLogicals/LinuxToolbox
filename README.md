@@ -2,7 +2,7 @@
 <h3 align="center">A New menu system for our handy unix scripts all in one repository.. (WIP)</h3>
 
 
-<p>&nbsp;<img align="center" src="[[https://imgur.com/a/linux-toolbox-v0-04-d259RLr](https://imgur.com/a/linux-toolbox-v0-04-d259RLr)](https://imgur.com/a/linux-toolbox-v0-04-d259RLr)" alt="Linux Toolbox v0.04" /></p>
+<p>&nbsp;<img align="center" src="https://imgur.com/a/linux-toolbox-v0-04-d259RLr" alt="Linux Toolbox v0.04" /></p>
 
 <a href="https://www.gnu.org/software/bash/" target="_blank" rel="noreferrer"> <img src="https://www.vectorlogo.zone/logos/gnu_bash/gnu_bash-icon.svg" alt="bash" width="40" height="40"/> </a>
 <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/rust/rust-plain.svg" alt="rust" width="40" height="40"/>
