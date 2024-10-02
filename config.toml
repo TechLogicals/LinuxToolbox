@@ -1,12 +1,8 @@
-[Arch-Specific-scripts]
-ArchInstall = "scripts/install.sh"
+[Arch-Install-scripts]
+ArchInstall = "scripts/archinstall.sh"
 
 [Debian-Specfic-Scripts]
 DebianInstall = "scripts/debianinstall.sh"
-
-[Desktop-Scripts]
-Desktop-Installer = "scripts/desktops.sh"
-Cosmic-Desktop-Installer = "scripts/cosmic.sh"
 
 [Seedbox-Scripts]
 Seedbox-All = "scripts/seedboxall.sh"
