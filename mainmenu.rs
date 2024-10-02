@@ -495,95 +495,96 @@ Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-let mut terminal = setup_terminal()?;
-let config_path = PathBuf::from("config.toml");
-let (categories, _config_dir) = load_config(&config_path)?;
+    println!("Starting program. Current version: {}", CURRENT_VERSION);
+    let mut terminal = setup_terminal()?;
+    let config_path = PathBuf::from("config.toml");
+    let (categories, _config_dir) = load_config(&config_path)?;
 
-let mut selected_category = 0;
-let mut selected_program = 0;
-let mut category_state = ListState::default();
-category_state.select(Some(0));
-let mut program_state = ListState::default();
-program_state.select(Some(0));
-let mut menu_state = MenuState::Categories;
-let mut search_query = String::new();
-let mut filtered_programs: Vec<(&Category, &Program)> = Vec::new();
+    let mut selected_category = 0;
+    let mut selected_program = 0;
+    let mut category_state = ListState::default();
+    category_state.select(Some(0));
+    let mut program_state = ListState::default();
+    program_state.select(Some(0));
+    let mut menu_state = MenuState::Categories;
+    let mut search_query = String::new();
+    let mut filtered_programs: Vec<(&Category, &Program)> = Vec::new();
 
-let update_available = match check_for_updates() {
-    Ok(update) => update,
-    Err(e) => {
-        eprintln!("Error checking for updates: {}", e);
-        None
-    }
-};
-let mut color_scheme = load_color_scheme();
+    let update_available = match check_for_updates() {
+        Ok(update) => update,
+        Err(e) => {
+            eprintln!("Error checking for updates: {}", e);
+            None
+        }
+    };
+    let mut color_scheme = load_color_scheme();
 
-terminal.clear()?;
+    terminal.clear()?;
 
-loop {
-    terminal.draw(|f| {
-        f.render_widget(Clear, f.size());
-        
-        draw_ui(
-            f,
-            &categories,
-            selected_category,
-            &mut category_state,
-            &mut program_state,
-            &menu_state,
-            &search_query,
-            &filtered_programs,
-            &update_available,
-            &color_scheme,
-        )
-    })?;
+    loop {
+        terminal.draw(|f| {
+            f.render_widget(Clear, f.size());
+            
+            draw_ui(
+                f,
+                &categories,
+                selected_category,
+                &mut category_state,
+                &mut program_state,
+                &menu_state,
+                &search_query,
+                &filtered_programs,
+                &update_available,
+                &color_scheme,
+            )
+        })?;
 
-    if let Event::Key(key) = event::read()? {
-        let should_run_script = handle_input(
-            key,
-            &mut menu_state,
-            &mut selected_category,
-            &mut selected_program,
-            &categories,
-            &mut search_query,
-            &mut filtered_programs,
-            &mut category_state,
-            &mut program_state,
-            &mut color_scheme,
-        );
+        if let Event::Key(key) = event::read()? {
+            let should_run_script = handle_input(
+                key,
+                &mut menu_state,
+                &mut selected_category,
+                &mut selected_program,
+                &categories,
+                &mut search_query,
+                &mut filtered_programs,
+                &mut category_state,
+                &mut program_state,
+                &mut color_scheme,
+            );
 
-        if should_run_script {
-            let script = match menu_state {
-                MenuState::Programs => &categories[selected_category].programs[selected_program].script,
-                MenuState::Search => &filtered_programs[selected_program].1.script,
-                _ => continue,
-            };
+            if should_run_script {
+                let script = match menu_state {
+                    MenuState::Programs => &categories[selected_category].programs[selected_program].script,
+                    MenuState::Search => &filtered_programs[selected_program].1.script,
+                    _ => continue,
+                };
 
-            match run_script(script) {
-                Ok(_) => {},
-                Err(e) => {
-                    disable_raw_mode()?;
-                    execute!(terminal.backend_mut(), LeaveAlternateScreen, Show)?;
-                    println!("Error running script: {}", e);
-                    println!("Press any key to continue...");
-                    let _ = event::read()?;
+                match run_script(script) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        disable_raw_mode()?;
+                        execute!(terminal.backend_mut(), LeaveAlternateScreen, Show)?;
+                        println!("Error running script: {}", e);
+                        println!("Press any key to continue...");
+                        let _ = event::read()?;
+                    }
                 }
+
+                enable_raw_mode()?;
+                execute!(terminal.backend_mut(), EnterAlternateScreen, Hide)?;
+                terminal.clear()?;
             }
 
-            enable_raw_mode()?;
-            execute!(terminal.backend_mut(), EnterAlternateScreen, Hide)?;
-            terminal.clear()?;
-        }
-
-        if key.code == KeyCode::Char('q') && menu_state != MenuState::Search {
-            break;
+            if key.code == KeyCode::Char('q') && menu_state != MenuState::Search {
+                break;
+            }
         }
     }
-}
 
-// Cleanup
-disable_raw_mode()?;
-execute!(terminal.backend_mut(), LeaveAlternateScreen, Show)?;
+    // Cleanup
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, Show)?;
 
-Ok(())
+    Ok(())
 }
