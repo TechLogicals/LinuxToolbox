@@ -1,0 +1,13 @@
+bridge-utils
+dnsmasq
+edk2-ovmf
+edk2-shell
+iptables-nft
+libguestfs
+libiscsi
+libvirt
+openbsd-netcat
+qemu
+qemu-desktop
+swtpm
+virt-manager
