@@ -23,7 +23,7 @@ use serde_json::Value as JsonValue;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-const CURRENT_VERSION: &str = "0.05";
+const CURRENT_VERSION: &str = "0.5.0";
 const GITHUB_REPO: &str = "TechLogicals/LinuxToolbox";
 const COLOR_SCHEME_FILE: &str = "color_scheme.json";
 
@@ -156,6 +156,9 @@ fn load_config(config_path: &PathBuf) -> Result<(Vec<Category>, PathBuf), Box<dy
 }
 
 fn check_for_updates() -> Result<Option<String>, Box<dyn std::error::Error>> {
+    println!("Checking for updates...");
+    println!("Current version: {}", CURRENT_VERSION);
+    
     let client = Client::new();
     let url = format!("https://api.github.com/repos/{}/releases/latest", GITHUB_REPO);
     let response = client.get(&url).header("User-Agent", "LinuxToolbox").send()?;
@@ -163,8 +166,15 @@ fn check_for_updates() -> Result<Option<String>, Box<dyn std::error::Error>> {
     if response.status().is_success() {
         let json: JsonValue = response.json()?;
         if let Some(tag_name) = json["tag_name"].as_str() {
-            let latest_version = Version::parse(&tag_name.trim_start_matches('v'))?;
-            let current_version = Version::parse(CURRENT_VERSION)?;
+            println!("Latest version from GitHub: {}", tag_name);
+            
+            let latest_version = Version::parse(&tag_name.trim_start_matches('v'))
+                .map_err(|e| format!("Failed to parse latest version '{}': {}", tag_name, e))?;
+            let current_version = Version::parse(CURRENT_VERSION)
+                .map_err(|e| format!("Failed to parse current version '{}': {}", CURRENT_VERSION, e))?;
+            
+            println!("Parsed current version: {}", current_version);
+            println!("Parsed latest version: {}", latest_version);
             
             if latest_version > current_version {
                 return Ok(Some(latest_version.to_string()));
@@ -175,18 +185,38 @@ fn check_for_updates() -> Result<Option<String>, Box<dyn std::error::Error>> {
     Ok(None)
 }
 
-fn ensure_executable(path: &PathBuf) -> std::io::Result<()> {
-    let metadata = fs::metadata(path)?;
-    let mut permissions = metadata.permissions();
-    let mode = permissions.mode();
-    if mode & 0o111 == 0 {
-        permissions.set_mode(mode | 0o111);
-        fs::set_permissions(path, permissions)?;
+
+fn check_script(script: &PathBuf) -> std::io::Result<()> {
+    if !script.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("Script not found: {:?}", script)
+        ));
     }
+
+    let metadata = fs::metadata(script)?;
+    if !metadata.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Not a file: {:?}", script)
+        ));
+    }
+
+    let permissions = metadata.permissions();
+    if permissions.mode() & 0o111 == 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("Script is not executable: {:?}", script)
+        ));
+    }
+
     Ok(())
 }
 
 fn run_script(script: &PathBuf) -> std::io::Result<()> {
+    // Check if the script exists and is executable
+    check_script(script)?;
+
     disable_raw_mode()?;
     execute!(stdout(), LeaveAlternateScreen, Show)?;
     execute!(stdout(), crossterm::terminal::Clear(crossterm::terminal::ClearType::All), MoveTo(0, 0))?;
@@ -479,7 +509,13 @@ let mut menu_state = MenuState::Categories;
 let mut search_query = String::new();
 let mut filtered_programs: Vec<(&Category, &Program)> = Vec::new();
 
-let update_available = check_for_updates()?;
+let update_available = match check_for_updates() {
+    Ok(update) => update,
+    Err(e) => {
+        eprintln!("Error checking for updates: {}", e);
+        None
+    }
+};
 let mut color_scheme = load_color_scheme();
 
 terminal.clear()?;
@@ -523,8 +559,17 @@ loop {
                 _ => continue,
             };
 
-            ensure_executable(script)?;
-            run_script(script)?;
+            match run_script(script) {
+                Ok(_) => {},
+                Err(e) => {
+                    disable_raw_mode()?;
+                    execute!(terminal.backend_mut(), LeaveAlternateScreen, Show)?;
+                    println!("Error running script: {}", e);
+                    println!("Press any key to continue...");
+                    let _ = event::read()?;
+                }
+            }
+
             enable_raw_mode()?;
             execute!(terminal.backend_mut(), EnterAlternateScreen, Hide)?;
             terminal.clear()?;
