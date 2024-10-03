@@ -1,0 +1,16 @@
+arch-install-scripts
+bc
+cryptsetup
+curl
+dosfstools
+findutils
+fzf
+git
+gptfdisk
+grep
+lvm2
+pacman
+pacman-contrib
+pacman-mirrorlist
+parted
+sed

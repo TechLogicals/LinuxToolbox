@@ -1,0 +1,9 @@
+bash-completion
+linux
+linux-headers
+linux-tools
+lsb-release
+man-db
+man-pages
+memtest86+
+pacman-contrib

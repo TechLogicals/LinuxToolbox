@@ -1,0 +1,5 @@
+libx11-dev
+libxft-dev
+libxinerama-dev
+make
+gcc
