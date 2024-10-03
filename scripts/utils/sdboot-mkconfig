@@ -1,0 +1,200 @@
+#!/bin/bash
+
+# @Tech Logicals
+
+set -eu
+
+function get_cmdline {
+  local config
+  local cmdline
+
+  if [[ "${1}" = "default" ]]; then
+    if [ -f "${EFIDIR}/loader/loader.conf" ]; then
+      config=$(sed -n "s/^default\s\+\(.*\)/\1/p" "${EFIDIR}/loader/loader.conf")
+    else
+      exit 1
+    fi
+  else
+    config=$(basename "${1}")
+  fi
+
+  if [ -f "${EFIDIR}/loader/entries/${config}" ]; then
+    cmdline=$(sed -n "s/^options\s\+\(.*\)/\1/p" "${EFIDIR}/loader/entries/${config}")
+  else
+    exit 1
+  fi
+
+  if [[ -z "${cmdline}" ]]; then
+    exit 1
+  fi
+
+  echo "${cmdline}"
+}
+
+function copy_images {
+  if [ -f "/boot/vmlinuz-${KERNEL}" ] &&
+     [ -f "/boot/initramfs-${KERNEL}.img" ] &&
+     [ -f "/boot/initramfs-${KERNEL}-fallback.img" ]; then
+    cp -af \
+      "/boot/vmlinuz-${KERNEL}" \
+      "/boot/initramfs-${KERNEL}.img" \
+      "/boot/initramfs-${KERNEL}-fallback.img" \
+      "${EFIDIR}"
+  else
+    exit 1
+  fi
+}
+
+function write_entries {
+  local tmp
+  local image
+  for image in "${KERNEL}" "${KERNEL}-fallback"; do
+    tmp="title	Arch Linux, ${image/-fallback/ (fallback)}
+linux	/vmlinuz-${image/-fallback/}
+initrd	/initramfs-${image}.img
+options	${CMDLINE}"
+    if ! cmp -s "${EFIDIR}/loader/entries/${image}.conf" <(echo "${tmp}"); then
+      echo "${tmp}" > "${EFIDIR}/loader/entries/${image}.conf"
+    fi
+  done
+}
+
+function print_entries {
+  local image
+  for image in "${KERNEL}" "${KERNEL}-fallback"; do
+    cat << EOF
+title	Arch Linux, ${image/-fallback/ (fallback)}
+linux	/vmlinuz-${image/-fallback/}
+initrd	/initramfs-${image}.img
+options	${CMDLINE}
+EOF
+  done
+}
+
+function remove_entry {
+  local default
+  default="$(sed -n "s/^default\s\+\(.*.conf\)$/\1/p" /efi/loader/loader.conf)"
+  if ! [ "${default}" = "${KERNEL}.conf" ]; then
+    if [ -f "${EFIDIR}/vmlinuz-${KERNEL}" ] &&
+       [ -f "${EFIDIR}/initramfs-${KERNEL}.img" ] &&
+       [ -f "${EFIDIR}/initramfs-${KERNEL}-fallback.img" ] &&
+       [ -f "${EFIDIR}/loader/entries/${KERNEL}.conf" ] &&
+       [ -f "${EFIDIR}/loader/entries/${KERNEL}-fallback.conf" ]; then
+      rm \
+        "${EFIDIR}/vmlinuz-${KERNEL}" \
+        "${EFIDIR}/initramfs-${KERNEL}.img" \
+        "${EFIDIR}/initramfs-${KERNEL}-fallback.img" \
+        "${EFIDIR}/loader/entries/${KERNEL}.conf" \
+        "${EFIDIR}/loader/entries/${KERNEL}-fallback.conf"
+    else
+       exit 1
+    fi
+  else
+    exit 1
+  fi
+}
+
+if ! EFIDIR="$(bootctl -p)"; then
+  exit 1
+fi
+
+MODE="${1:-print}"
+KERNEL="${2:-all}"
+
+case "${MODE}" in
+  init)
+    case "${KERNEL}" in
+      all)
+        for VMLINUZ in /boot/vmlinuz-*; do
+          KERNEL="$(basename "${VMLINUZ}")"
+          KERNEL="${KERNEL/vmlinuz-/}"
+          copy_images
+          CMDLINE="$(get_cmdline default)"
+          write_entries
+        done
+        ;;
+      *)
+        if [[ "${KERNEL}" =~ ^linux ]]; then
+          copy_images
+          CMDLINE="$(get_cmdline default)"
+          write_entries
+        else
+          exit 1
+        fi
+        ;;
+    esac
+    ;;
+  print)
+    case "${KERNEL}" in
+      all)
+        for VMLINUZ in /boot/vmlinuz-*; do
+          KERNEL="$(basename "${VMLINUZ}")"
+          KERNEL="${KERNEL/vmlinuz-/}"
+          if ! [ -f "${EFIDIR}/loader/entries/${KERNEL}.conf" ]; then
+            CMDLINE="$(get_cmdline default)"
+          else
+            CMDLINE="$(get_cmdline "${KERNEL}.conf")"
+          fi
+          print_entries
+        done
+        ;;
+      *)
+        if [[ "${KERNEL}" =~ ^linux ]]; then
+          if ! [ -f "${EFIDIR}/loader/entries/${KERNEL}.conf" ]; then
+            CMDLINE="$(get_cmdline default)"
+          else
+            CMDLINE="$(get_cmdline "${KERNEL}.conf")"
+          fi
+          print_entries
+        else
+          exit 1
+        fi
+        ;;
+    esac
+    ;;
+  remove)
+    case "${KERNEL}" in
+      all)
+        exit 1 # don't do this
+        # for VMLINUZ in /boot/vmlinuz-*; do
+        #   KERNEL="$(basename "${VMLINUZ}")"
+        #   KERNEL="${KERNEL/vmlinuz-/}"
+        #   remove_entry
+        # done
+        ;;
+      *)
+        if [[ "${KERNEL}" =~ ^linux ]]; then
+          remove_entry
+        else
+          exit 1
+        fi
+        ;;
+    esac
+    ;;
+  update)
+    case "${KERNEL}" in
+      all)
+        for VMLINUZ in /boot/vmlinuz-*; do
+          KERNEL="$(basename "${VMLINUZ}")"
+          KERNEL="${KERNEL/vmlinuz-/}"
+          copy_images
+          if ! [ -f "${EFIDIR}/loader/entries/${KERNEL}.conf" ]; then
+            CMDLINE="$(get_cmdline default)"
+            write_entries
+          fi
+        done
+        ;;
+      *)
+        if [[ "${KERNEL}" =~ ^linux ]]; then
+          copy_images
+          if ! [ -f "${EFIDIR}/loader/entries/${KERNEL}.conf" ]; then
+            CMDLINE="$(get_cmdline default)"
+            write_entries
+          fi
+        else
+          exit 1
+        fi
+        ;;
+    esac
+    ;;
+esac

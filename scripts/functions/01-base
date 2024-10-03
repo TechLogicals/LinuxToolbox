@@ -1,0 +1,227 @@
+#!/bin/bash
+
+#
+
+DIR="$(dirname "$0")"
+
+function install_base {
+  local base="${DIR}/packages/base.list"
+  local bashrc="${DIR}/dotfiles/bashrc"
+  local bashprofile="${DIR}/dotfiles/bash_profile"
+  local pacmanconf="/etc/pacman.conf"
+
+  show_header "Installing the base packages and their config files."
+  check_installed "${base}"
+  show_success "Base packages installed."
+
+  copy_config_file "${bashprofile}" "${HOME}/.bash_profile"
+  copy_config_file "${bashrc}" "${HOME}/.bashrc"
+}
+
+function enable_multilib {
+  local pacmanconf="/etc/pacman.conf"
+
+  if [[ $(uname -m) = "x86_64" ]]; then
+    show_info "Enabling multilib pacman repository."
+    sudo sed -i \
+      -e "s/^#\[multilib\]$/\[multilib\]/g" \
+      -e "/^\[multilib\]$/{n;s/^#Include = /Include = /}" "${pacmanconf}"
+    sync_repos
+    show_success "Multilib enabled."
+  else
+    show_warning "Multilib not applicable for 32-bit installations. Skipping."
+    show_warning "Arch discontinued 32-bit support in early 2017. Consider upgrading to a 64-bit."
+  fi
+}
+
+function update_mirrorlist {
+  local mirrors="${DIR}/packages/mirrors.list"
+
+  show_header "Installing packages for configuring the Arch mirrorlists."
+  check_installed "${mirrors}"
+  show_success "Mirrorlsit packages installed."
+
+  # Use reflector to sort among fastest mirrors
+  show_info "Using reflector to find the fastest https mirrors."
+  sudo reflector \
+    --verbose \
+    --latest 15 \
+    --protocol https \
+    --sort rate \
+    --save /etc/pacman.d/mirrorlist
+}
+
+function install_firmware {
+  local firmware="${DIR}/packages/firmware.list"
+
+  show_header "Installing the firmware and microcode."
+  check_installed "${firmware}"
+}
+
+function enable_sudo_insults {
+  # Customize sudo to insult incorrect password attempts
+  if ! sudo grep -q "^Defaults\s\+insults" /etc/sudoers; then
+    show_info "Enabling sudo insults."
+    sudo sh -c \
+      'sed -e "/^# Defaults!REBOOT !log_output$/a Defaults insults" /etc/sudoers |
+       EDITOR="tee -p" visudo > /dev/null'
+  else
+    show_info "Insults already enabled, you masochist."
+  fi
+}
+
+function stylize_pacman {
+  # - color pacman output
+  # - show pacman-the-game-styled progress bars for pacman
+  local pacmanconf="/etc/pacman.conf"
+  show_info "Enabling color and Pac-man animation for pacman."
+  if ! grep -q ^Color$ ${pacmanconf}; then
+    sudo sed -i "s/^#Color$/Color/" ${pacmanconf}
+  fi
+  if ! grep -q ^ILoveCandy$ "${pacmanconf}"; then
+    sudo sed -i "/^CheckSpace$/a ILoveCandy" ${pacmanconf}
+  fi
+}
+
+function parallelize_pacman {
+  local pacmanconf="/etc/pacman.conf"
+  show_info "Enabling parallel pacman downloads."
+  if ! grep -q "^ParallelDownloads = [0-9]\+$" "${pacmanconf}"; then
+    sudo sed -i "s/^#ParallelDownloads = \([0-9]\+\)$/ParallelDownloads = \1/g" ${pacmanconf}
+  fi
+}
+
+function update_packages {
+  show_header "Updating packages."
+  sync_repos
+  sudo pacman -Su --noconfirm
+  show_success "Packages updated."
+}
+
+function disable_beep {
+  local pcspkr_blacklist="/etc/modprobe.d/nobeep.conf"
+  local gtk2conf="${HOME}/.gtkrc-2.0"
+  local gtk3conf="${HOME}/.config/gtk-3.0/settings.ini"
+
+  show_header "Disable PC speaker beep."
+  show_info "Blacklisting pcspkr and snd_pcsp kernel modules."
+  if ! [ "$(ls -A /etc/modprobe.d/)" ]; then
+    sudo sh -c "echo 'blacklist pcspkr' >> ${pcspkr_blacklist}"
+    sudo sh -c "echo 'blacklist snd_pcsp' >> ${pcspkr_blacklist}"
+  else
+    if ! find /etc/modprobe.d/ -type f \
+         -exec grep -q "blacklist pcspkr" {} +; then
+      sudo sh -c "echo 'blacklist pcspkr' >> ${pcspkr_blacklist}"
+    fi
+    if ! find /etc/modprobe.d/ -type f \
+         -exec grep -q "blacklist snd_pcsp" {} +; then
+      sudo sh -c "echo 'blacklist snd_pcsp' >> ${pcspkr_blacklist}"
+    fi
+  fi
+  show_success "Blacklisted in ${pcspkr_blacklist@Q}."
+
+  show_info "Disabling gtk2 and gtk3 error-bell."
+  if [ -f "${gtk2conf}" ]; then
+    if grep -q "^gtk-error-bell=" "${gtk2conf}"; then
+      sed -i "s/^gtk-error-bell=.*$/gtk-error-bell=0/g" "${gtk2conf}"
+    else
+      echo "gtk-error-bell=0" >> "${gtk2conf}"
+    fi
+  else
+    mkdir -p "$(dirname "${gtk2conf}")"
+    echo "gtk-error-bell=0" >> "${gtk2conf}"
+  fi
+  if [ -f "${gtk3conf}" ]; then
+    if grep -q "^gtk-error-bell=" "${gtk3conf}"; then
+      sed -i "s/^gtk-error-bell=.*$/gtk-error-bell=0/g" "${gtk3conf}"
+    elif grep -q "^[Settings]" "${gtk3conf}"; then
+      sed -i "/^[Settings]$/a gtk-error-bell=0" "${gtk3conf}"
+    else
+      echo "[Settings]" >> "${gtk3conf}"
+      echo "gtk-error-bell=0" >> "${gtk3conf}"
+    fi
+  else
+    mkdir -p "$(dirname "${gtk3conf}")"
+    echo "[Settings]" > "${gtk3conf}"
+    echo "gtk-error-bell=0" >> "${gtk3conf}"
+  fi
+}
+
+function 01-base {
+  show_question "Base: what do you want to install?"
+  show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+
+  local options=(
+    "Back"
+    "Install All"
+    "Base packages"
+    "Mirrorlist"
+    "Install Firmware"
+    "Updates"
+    "Enable multilib"
+    "Sudo insults (Funny)"
+    "Pacman styling"
+    "Enable Pacman parallel downloading"
+    "Disable the system beep")
+  local option
+  select option in "${options[@]}"; do
+    case "${option}" in
+      "Back")
+        break
+        ;;
+      "Install All")
+        update_packages
+        install_base
+        update_mirrorlist
+        install_firmware
+        enable_multilib
+        enable_sudo_insults
+        stylize_pacman
+        parallelize_pacman
+        disable_beep
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        break
+        ;;
+      "Base packages")
+        install_base
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        ;;
+      "Mirrorlist")
+        update_mirrorlist
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        ;;
+      "Install Firmware")
+        install_firmware
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        ;;
+      "Updates")
+        update_packages
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        ;;
+      "Enable multilib")
+        enable_multilib
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        ;;
+      "Sudo insults (Funny)")
+        enable_sudo_insults
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        ;;
+      "Pacman styling")
+        stylize_pacman
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        ;;
+      "Enable Pacman parallel downloading")
+        parallelize_pacman
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        ;;
+      "Disable system beep")
+        disable_beep
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        ;;
+      *)
+        show_warning "Invalid option."
+        show_info "Main\n ${ENDBRANCH} Base (Hit ENTER to see options again.)"
+        ;;
+    esac
+  done
+}

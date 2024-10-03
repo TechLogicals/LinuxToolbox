@@ -1,0 +1,151 @@
+"global settings
+set nocompatible
+set title
+set shiftwidth=2
+set softtabstop=2
+set expandtab
+set smarttab
+set autoindent
+set smartindent
+set incsearch
+set hlsearch
+set smartcase
+set noerrorbells
+set novisualbell
+"set ruler
+set mouse=
+set wildmenu
+set wildignore=*.o,*~,*.pyc,*.lo
+set spelllang=en
+set spellfile=$HOME/.vim/spell/en.utf-8.add
+set undofile
+set undodir=$HOME/.vim/undo
+set encoding=utf-8
+filetype plugin indent on
+syntax on
+
+"airline
+set noshowmode
+set laststatus=2
+set t_Co=256
+set guifont=Monospace\ Regular\ for\ Powerline\ 10
+"let g:airline#extensions#tabline#enabled=1
+let g:airline_powerline_fonts=1
+
+"themes and appearance
+let &t_8f="\<Esc>[38;2;%lu;%lu;%lum"
+let &t_8b="\<Esc>[48;2;%lu;%lu;%lum"
+if (has("termguicolors"))
+  set termguicolors
+endif
+if filereadable( expand("$HOME/.vim/colors/colorific.vim") )
+  let g:colorific_style='dark2'
+  colorscheme colorific
+  if filereadable( expand("$HOME/.vim/autoload/airline/themes/colorific.vim") )
+    let g:airline_theme='colorific'
+  endif
+endif
+set background=dark
+
+"encryption
+"set cm=blowfish
+
+"syntastic
+set statusline+=%#warningmsg#
+set statusline+=%{SyntasticStatuslineFlag()}
+set statusline+=%*
+"let g:syntastic_always_populate_loc_list=1
+"let g:syntastic_auto_loc_list=1
+let g:syntastic_check_on_open=1
+let g:syntastic_enable_signs=1
+let g:syntastic_check_on_wq=0
+let g:syntastic_sh_shellcheck_args="-x"
+"let g:syntastic_c_remove_include_errors=1
+"let g:syntastic_cpp_include_dirs=[
+"  \ \"/usr/include/qt",
+"  \ \"/usr/include/qt/QtGui",
+"  \ \"/usr/include/qt/QtCore",
+"  \ \"/usr/include/qt/QtWidgets"]
+
+"bash
+au FileType bash,zsh,fish,sh setlocal shiftwidth=2
+au FileType bash,zsh,fish,sh setlocal softtabstop=2
+au FileType bash,zsh,fish,sh setlocal expandtab
+au FileType bash,zsh,fish,sh setlocal showmatch
+au FileType bash,zsh,fish,sh setlocal smartindent
+
+"latex
+"set grepprg=grep\ -nH\ $*
+"let g:tex_flavor="latex"
+
+"python
+"let g:jedi#force_py_version=3
+
+"c/cpp
+au FileType h,c,hpp,cpp setlocal shiftwidth=2
+au FileType h,c,hpp,cpp setlocal softtabstop=2
+au FileType h,c,hpp,cpp setlocal expandtab
+au FileType h,c,hpp,cpp setlocal showmatch
+au FileType h,c,hpp,cpp setlocal autoindent
+au FileType h,c,hpp,cpp setlocal cindent
+"au FileType h,c,hpp,cpp setlocal comments=sl:/*,mb:\ *,elx:\ */
+if filereadable( expand("/usr/share/clang/clang-format.py") )
+  au FileType h,c,hpp,cpp map <C-K> :py3f /usr/share/clang/clang-format.py<cr>
+  au FileType h,c,hpp,cpp imap <C-K> <c-o>:py3f /usr/share/clang/clang-format.py<cr>
+endif
+
+"omnicppcomplete
+"set omnifunc=syntaxcomplete#Complete " override built-in C omnicomplete with C++ OmniCppComplete plugin
+"let OmniCpp_GlobalScopeSearch   = 1
+"let OmniCpp_DisplayMode         = 1
+"let OmniCpp_ShowScopeInAbbr     = 0 "do not show namespace in pop-up
+"let OmniCpp_ShowPrototypeInAbbr = 1 "show prototype in pop-up
+"let OmniCpp_ShowAccess          = 1 "show access in pop-up
+"let OmniCpp_SelectFirstItem     = 1 "select first item in pop-up
+"set completeopt=menuone,menu,longest
+
+"markdown/tex/text
+au FileType bib,markdown,mkd,rmd,Rmd,rst,tex,text,textile setlocal spell
+
+"html
+au FileType html,css,scss,less setlocal shiftwidth=2
+au FileType html,css,scss,less setlocal softtabstop=2
+au FileType html,css,scss,less setlocal expandtab
+
+"vim-taglist
+let Tlist_Compact_Format = 1
+let Tlist_GainFocus_On_ToggleOpen = 1
+let Tlist_Close_On_Select = 1
+nnoremap <C-l> :TlistToggle<CR>
+
+"minibufexpl
+let g:miniBufExplAutoStart=0
+let g:miniBufExplHideWhenDiff=0
+
+"nerdtree
+map <C-n> :NERDTreeToggle<CR>
+autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTree") && b:NERDTree.isTabTree()) | q | endif
+let g:NERDTreeDirArrowExpandable = '►'
+let g:NERDTreeDirArrowCollapsible = '▼'
+
+"nerd-commenter
+let g:NERDSpaceDelims=1
+let g:NERDCompactSexyComs=1
+let g:NERDDefaultAlign='left'
+let g:NERDCommentEmptyLines=1
+
+"save cursor position
+augroup resCur
+  autocmd!
+  autocmd BufReadPost *
+    \ if line("'\"") >= 1 && line("'\"") <= line("$") |
+    \   exe "normal! g`\"" |
+    \ endif
+augroup END
+
+"workarounds for garbage characters
+set t_u7=
+set t_RV=
+
+"gitgutter
+" let g:gitgutter_enabled=0

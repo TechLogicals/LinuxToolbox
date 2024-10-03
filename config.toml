@@ -1,5 +1,6 @@
 [Arch-Install-scripts]
 ArchInstall = "scripts/archinstall.sh"
+Arch-Postinstall-Goodies = "scripts/postinstall2.sh"
 
 [Debian-Specfic-Scripts]
 DebianInstall = "scripts/debianinstall.sh"

@@ -1,0 +1,318 @@
+#!/bin/bash
+
+DIR="$(dirname "$0")"
+
+function install_gnome {
+  local gnome="${DIR}/packages/gnome.list"
+  local xdgdefaultconf="/etc/xdg/user-dirs.defaults"
+
+  show_header "Setting up GNOME desktop environment."
+  check_installed "${gnome}"
+  show_success "GNOME installed."
+
+  if ! test ${DESKTOP_SESSION+x}; then
+    export DESKTOP_SESSION="gnome"
+  fi
+
+  show_info "Setting up GDM greeter."
+  if [ -f /etc/systemd/system/display-manager.service ]; then
+    if [[ "$(systemctl is-active gdm)" = inactive ]]; then
+      local display_manager
+      display_manager="$(readlink -f /etc/systemd/system/display-manager.service)"
+      display_manager="${display_manager##*/}"
+      show_warning "Display manager already set to ${display_manager@Q}. Skipping GDM."
+    fi
+  else
+    sudo systemctl enable gdm.service
+  fi
+
+  local extensiondir=${HOME}/.local/share/gnome-shell/extensions
+  show_info "Downloading 'Desktop Icons' GNOME extension."
+  if ! [ -d "${HOME}/.local/share/gnome-shell/extensions/ding@rastersoft.com" ]; then
+    mkdir -p "${extensiondir}"
+    git clone https://gitlab.com/rastersoft/desktop-icons-ng.git \
+      "${HOME}/.local/share/gnome-shell/extensions/ding@rastersoft.com"
+  fi
+
+  show_info "Enabling Night Light."
+  gsettings set org.gnome.settings-daemon.plugins.color night-light-enabled true
+
+  show_info "Setting kitty as default terminal."
+  gsettings set org.gnome.desktop.default-applications.terminal exec 'kitty'
+
+  show_info "Setting up gnome-shell font-size overrides."
+  local gnomeshellcss="${DIR}/configs/gnome-shell.css"
+  mkdir -p "${HOME}/.local/share/themes/Adwaita/gnome-shell"
+  cp "${gnomeshellcss}" "${HOME}/.local/share/themes/Adwaita/gnome-shell/gnome-shell.css"
+  pushd "${HOME}/.local/share/themes" > /dev/null || exit
+  ln -s Adwaita Adwaita-dark
+  popd > /dev/null || exit
+
+  setup_common_directories
+}
+
+function install_cinnamon {
+  local cinnamon="${DIR}/packages/cinnamon.list"
+  local lightdmconf="/etc/lightdm/lightdm.conf"
+  local gammastepini="${DIR}/configs/gammastep.ini"
+
+  show_header "Setting up cinnamon desktop environment."
+  check_installed "${cinnamon}"
+  show_success "Cinnamon installed."
+
+  if ! test ${DESKTOP_SESSION+x}; then
+    export DESKTOP_SESSION="cinnamon"
+  fi
+
+  show_info "Setting up LightDM greeter."
+  sudo sed -i \
+    "s/^#greeter-hide-users=false/greeter-hide-users=false/g" \
+    "${lightdmconf}"
+  sudo sed -i \
+    "s/^#greeter-session=.*/greeter-session=lightdm-gtk-greeter/g" \
+    "${lightdmconf}"
+
+  if [ -f /etc/systemd/system/display-manager.service ]; then
+    if [[ "$(systemctl is-active lightdm)" = inactive ]]; then
+      local display_manager
+      display_manager="$(readlink -f /etc/systemd/system/display-manager.service)"
+      display_manager="${display_manager##*/}"
+      show_warning "Display manager already set to ${display_manager@Q}. Skipping LightDM."
+    fi
+  else
+    sudo systemctl enable lightdm.service
+  fi
+
+  # Get latitude and longitude using GeoClue2 for Gammastep.
+  show_info "Setting Gammastep config."
+  if [ -e /usr/lib/geoclue-2.0/demos/where-am-i ]; then
+    mkdir -p "${HOME}/.config/gammastep"
+    local tmp
+    local lat
+    local lon
+    if tmp="$(/usr/lib/geoclue-2.0/demos/where-am-i -t 10 -a 4)"; then
+      lat="$(echo "${tmp}" | sed -n "s/.*Latitude: \+\([-0-9\.]\+\)°\?.*/\1/p")"
+      lon="$(echo "${tmp}" | sed -n "s/.*Longitude: \+\([-0-9\.]\+\)°\?.*/\1/p")"
+      sed -e "s,^lat=.*,lat=${lat},g" -e "s,^lon=.*,lon=${lon},g" \
+        "${gammastepini}" > "${HOME}/.config/gammastep/config.ini"
+    else
+      show_warning "Parsing latitude/longitude failed. Defaulting to NYC."
+      cp "${gammastepini}" "${HOME}/.config/gammastep/config.ini"
+    fi
+  else
+    show_warning "Geoclue 'where-am-i' demo not found. Defaulting to NYC."
+    cp "${gammastepini}" "${HOME}/.config/gammastep/config.ini"
+  fi
+
+  show_info "Setting kitty as default terminal."
+  gsettings set org.cinnamon.desktop.default-applications.terminal exec 'kitty'
+
+  setup_common_directories
+}
+
+function install_kde {
+  local kde="${DIR}/packages/kde.list"
+
+  show_header "Setting up KDE desktop environment."
+  check_installed "${kde}"
+  show_success "KDE installed."
+
+  if ! test ${DESKTOP_SESSION+x}; then
+    export DESKTOP_SESSION="plasma"
+  fi
+
+  show_info "Setting up SDDM greeter."
+  sudo mkdir -p /etc/sddm.conf.d/
+  sudo tee /etc/sddm.conf.d/virtualkbd.conf > /dev/null << EOF
+[General]
+InputMethod=qtvirtualkeyboard
+EOF
+
+  if [ -f /etc/systemd/system/display-manager.service ]; then
+    if [[ "$(systemctl is-active sddm)" = inactive ]]; then
+      local display_manager
+      display_manager="$(readlink -f /etc/systemd/system/display-manager.service)"
+      display_manager="${display_manager##*/}"
+      show_warning "Display manager already set to ${display_manager@Q}. Skipping SDDM."
+    fi
+  else
+    sudo systemctl enable sddm.service
+  fi
+
+  # Set flag to enable KDE dialog boxes for GTK applications.
+  set_config_key_value \
+    "${HOME}/.config/environment.d/envvars.conf" "GTK_USE_PORTAL" "1"
+  set_config_key_value "${HOME}/.xprofile" "export GTK_USE_PORTAL" "1"
+
+  local kwconfig
+  if kwconfig="$(_get_kwrite_config)"; then
+    show_info "Enabling 'Night Color' to reduce blue light at night."
+    "${kwconfig}" --file kwinrc --group "NightColor" --key "Active" "true"
+    "${kwconfig}" --file kwinrc --group "NightColor" --key "DayTemperature" "5700"
+    "${kwconfig}" --file kwinrc --group "NightColor" --key "NightTemperature" "2500"
+
+    show_info "Setting kitty as default terminal."
+    "${kwconfig}" --file kdeglobals --group "General" --key "TerminalApplication" "kitty"
+    "${kwconfig}" --file kdeglobals --group "General" --key "TerminalService" "kitty.desktop"
+
+    # Add Ctrl+Alt+T launcher for kitty
+    "${kwconfig}" --file kglobalshortcutsrc --group "kitty.desktop" --key "_k_friendly_name" "kitty"
+    "${kwconfig}" --file kglobalshortcutsrc --group "kitty.desktop" --key "_launch" "Ctrl+Alt+T,none,kitty"
+
+    show_info "Setting kio icon metadata for Projects/ and Sync/."
+    "${kwconfig}" --file "${HOME}/Projects/.directory" --group 'Desktop Entry' --key 'Icon' 'folder-development'
+    "${kwconfig}" --file "${HOME}/Sync/.directory" --group 'Desktop Entry' --key 'Icon' 'folder-cloud'
+  fi
+
+  setup_common_directories
+}
+
+function install_cosmic {
+  local cosmic="${DIR}/packages/cosmic.list"
+
+  show_header "Setting up Cosmic desktop environment."
+  check_installed "${cosmic}"
+  show_success "Cosmic installed."
+
+  if ! test ${DESKTOP_SESSION+x}; then
+    export DESKTOP_SESSION="cosmic"
+  fi
+
+  show_info "Setting up Cosmic greeter."
+  if [ -f /etc/systemd/system/display-manager.service ]; then
+    if [[ "$(systemctl is-active cosmic-greeter)" = inactive ]]; then
+      local display_manager
+      display_manager="$(readlink -f /etc/systemd/system/display-manager.service)"
+      display_manager="${display_manager##*/}"
+      show_warning "Display manager already set to ${display_manager@Q}. Skipping Cosmic greeter."
+    fi
+  else
+    sudo systemctl enable cosmic-greeter.service
+  fi
+
+  show_info "Setting kitty as default terminal."
+  gsettings set org.gnome.desktop.default-applications.terminal exec 'kitty'
+
+  setup_common_directories
+}
+
+function install_hyprland {
+  local hyprland="${DIR}/packages/hyprland.list"
+
+  show_header "Setting up Hyprland desktop environment."
+  check_installed "${hyprland}"
+  show_success "Hyprland installed."
+
+  if ! test ${DESKTOP_SESSION+x}; then
+    export DESKTOP_SESSION="hyprland"
+  fi
+
+  show_info "Setting up Hyprland configuration."
+  mkdir -p "${HOME}/.config/hypr"
+  cp "${DIR}/configs/hyprland.conf" "${HOME}/.config/hypr/hyprland.conf"
+
+  show_info "Setting kitty as default terminal."
+  sed -i 's/^terminal =.*/terminal = kitty/' "${HOME}/.config/hypr/hyprland.conf"
+
+  setup_common_directories
+}
+
+function install_dwm {
+  local dwm="${DIR}/packages/dwm.list"
+
+  show_header "Setting up DWM desktop environment."
+  check_installed "${dwm}"
+  show_success "DWM installed."
+
+  if ! test ${DESKTOP_SESSION+x}; then
+    export DESKTOP_SESSION="dwm"
+  fi
+
+  show_info "Setting up DWM configuration."
+  mkdir -p "${HOME}/.dwm"
+  cp "${DIR}/configs/dwm-config.h" "${HOME}/.dwm/config.h"
+
+  show_info "Compiling and installing DWM."
+  git clone https://git.suckless.org/dwm "${HOME}/.dwm/dwm"
+  cd "${HOME}/.dwm/dwm" || exit
+  make
+  sudo make clean install
+
+  show_info "Setting up .xinitrc for DWM."
+  echo "exec dwm" > "${HOME}/.xinitrc"
+
+  show_info "Setting kitty as default terminal."
+  sed -i 's/^static const char \*termcmd\[\] = { "st", NULL };/static const char *termcmd[] = { "kitty", NULL };/' "${HOME}/.dwm/config.h"
+
+  setup_common_directories
+}
+
+function setup_common_directories {
+  local xdgdefaultconf="/etc/xdg/user-dirs.defaults"
+
+  show_info "Creating Projects/ and Sync/ directories."
+  mkdir -p "${HOME}/Projects"
+  mkdir -p "${HOME}/Sync"
+
+  show_info "Setting gvfs icon metadata for Projects/ and Sync/."
+  gio set "${HOME}/Projects/" -t string metadata::custom-icon-name folder-development
+  gio set "${HOME}/Sync/" -t string metadata::custom-icon-name folder-cloud
+
+  show_info "Disabling Templates/ and Public/ directories."
+  sudo sed -i "s/^TEMPLATES/#TEMPLATES/g" "${xdgdefaultconf}"
+  sudo sed -i "s/^PUBLICSHARE/#PUBLICSHARE/g" "${xdgdefaultconf}"
+  [ -d "${HOME}/Templates" ] && rmdir --ignore-fail-on-non-empty "${HOME}/Templates"
+  [ -d "${HOME}/Public" ] && rmdir --ignore-fail-on-non-empty "${HOME}/Public"
+  xdg-user-dirs-update
+}
+
+function 02-desktop {
+  show_question "Desktop: what do you want to install?"
+  show_info "Main\n ${ENDBRANCH} Desktop (Hit ENTER to see options again.)"
+
+  local options=("Back" "All" "GNOME" "Cinnamon" "KDE" "Cosmic" "Hyprland" "DWM")
+  local option
+  select option in "${options[@]}"; do
+    case "${option}" in
+      "Back")
+        break
+        ;;
+      "All")
+        install_gnome
+        install_cinnamon
+        install_kde
+        install_cosmic
+        install_hyprland
+        install_dwm
+        show_info "Main\n ${ENDBRANCH} Desktop (Hit ENTER to see options again.)"
+        ;;
+      "GNOME")
+        install_gnome
+        show_info "Main\n ${ENDBRANCH} Desktop (Hit ENTER to see options again.)"
+        ;;
+      "Cinnamon")
+        install_cinnamon
+        show_info "Main\n ${ENDBRANCH} Desktop (Hit ENTER to see options again.)"
+        ;;
+      "KDE")
+        install_kde
+        show_info "Main\n ${ENDBRANCH} Desktop (Hit ENTER to see options again.)"
+        ;;
+      "Cosmic")
+        install_cosmic
+        show_info "Main\n ${ENDBRANCH} Desktop (Hit ENTER to see options again.)"
+        ;;
+      "Hyprland")
+        install_hyprland
+        show_info "Main\n ${ENDBRANCH} Desktop (Hit ENTER to see options again.)"
+        ;;
+      "DWM")
+        install_dwm
+        show_info "Main\n ${ENDBRANCH} Desktop (Hit ENTER to see options again.)"
+        ;;
+      *)
+        show_warning "Invalid option."
+        ;;
+    esac
+  done
+}

@@ -1,0 +1,277 @@
+#!/bin/bash
+
+
+DIR="$(dirname "$0")"
+
+MKSDBOOTCONF="${DIR}/utils/sdboot-mkconfig"
+
+function install_zsh {
+  local zsh="${DIR}/packages/zsh.list"
+  local zshrc="${DIR}/dotfiles/zshrc"
+
+  show_header "Installing Zsh."
+  check_installed "${zsh}"
+  show_success "Zsh installed."
+
+  mkdir -p "${HOME}/.local/share/zsh/site-functions"
+
+  copy_config_file "${zshrc}" "${HOME}/.zshrc"
+}
+
+function install_linux_hardened {
+  local hardened="${DIR}/packages/hardened.list"
+
+  show_header "Installing linux-hardened kernel."
+  check_installed "${hardened}"
+  show_success "Hardened kernel installed."
+
+  if command -v grub-mkconfig > /dev/null 2>&1; then
+    show_info "Regenerating grub.cfg"
+    sudo grub-mkconfig -o /boot/grub/grub.cfg
+  fi
+
+  if [[ "$(sudo bootctl is-installed)" = yes ]]; then
+    sudo "${MKSDBOOTCONF}" init linux-hardened
+    sudo systemctl enable --now efi-update@linux-hardened.path
+  fi
+}
+
+function install_linux_lts {
+  local lts="${DIR}/packages/lts.list"
+
+  show_header "Installing linux-lts kernel."
+  check_installed "${lts}"
+  show_success "LTS kernel installed."
+
+  if command -v grub-mkconfig > /dev/null 2>&1; then
+    show_info "Regenerating grub.cfg"
+    sudo grub-mkconfig -o /boot/grub/grub.cfg
+  fi
+
+  if [[ "$(sudo bootctl is-installed)" = yes ]]; then
+    sudo "${MKSDBOOTCONF}" init linux-lts
+    sudo systemctl enable --now efi-update@linux-lts.path
+  fi
+}
+
+function install_linux_zen {
+  local zen="${DIR}/packages/zen.list"
+
+  show_header "Installing linux-zen kernel."
+  check_installed "${zen}"
+  show_success "Zen kernel installed."
+
+  if command -v grub-mkconfig > /dev/null 2>&1; then
+    show_info "Regenerating grub.cfg"
+    sudo grub-mkconfig -o /boot/grub/grub.cfg
+  fi
+
+  if [[ "$(sudo bootctl is-installed)" = yes ]]; then
+    sudo "${MKSDBOOTCONF}" init linux-zen
+    sudo systemctl enable --now efi-update@linux-zen.path
+  fi
+}
+
+function install_linux_rt {
+  local rt="${DIR}/packages/rt.list"
+
+  show_header "Installing linux-rt kernel."
+  check_installed "${rt}"
+  show_success "Real-time kernel installed."
+
+  if command -v grub-mkconfig > /dev/null 2>&1; then
+    show_info "Regenerating grub.cfg"
+    sudo grub-mkconfig -o /boot/grub/grub.cfg
+  fi
+
+  if [[ "$(sudo bootctl is-installed)" = yes ]]; then
+    sudo "${MKSDBOOTCONF}" init linux-rt
+    sudo systemctl enable --now efi-update@linux-rt.path
+  fi
+}
+
+function install_linux_rt_lts {
+  local rtlts="${DIR}/packages/rt-lts.list"
+
+  show_header "Installing linux-rt-lts kernel."
+  check_installed "${rtlts}"
+  show_success "Real-time LTS kernel installed."
+
+  if command -v grub-mkconfig > /dev/null 2>&1; then
+    show_info "Regenerating grub.cfg"
+    sudo grub-mkconfig -o /boot/grub/grub.cfg
+  fi
+
+  if [[ "$(sudo bootctl is-installed)" = yes ]]; then
+    sudo "${MKSDBOOTCONF}" init linux-rt-lts
+    sudo systemctl enable --now efi-update@linux-rt-lts.path
+  fi
+}
+
+function install_utils {
+  local utils="${DIR}/packages/utils.list"
+  local tmuxconfig="${DIR}/dotfiles/tmux.conf"
+  local rkhunterconfig="/etc/rkhunter.conf"
+
+  show_header "Installing general utilities."
+  check_installed "${utils}"
+  show_success "Utilities installed."
+
+  show_info "Installing tmux config."
+  cp -f "${tmuxconfig}" "${HOME}/.tmux.conf"
+
+  show_info "Whitelisting files in /etc/rkhunter.conf"
+  sudo sed -i \
+    -e "/^#SCRIPTWHITELIST=\/usr\/bin\/groups$/a SCRIPTWHITELIST=\/usr\/bin\/egrep" \
+    -e "/^#SCRIPTWHITELIST=\/usr\/bin\/groups$/a SCRIPTWHITELIST=\/usr\/bin\/fgrep" \
+    -e "/^#SCRIPTWHITELIST=\/usr\/bin\/groups$/a SCRIPTWHITELIST=\/usr\/bin\/ldd" \
+    -e "/^#SCRIPTWHITELIST=\/usr\/bin\/groups$/a SCRIPTWHITELIST=\/usr\/bin\/vendor_perl\/GET" \
+    "${rkhunterconfig}"
+}
+
+function install_utils_aur {
+  local aurutils="${DIR}/packages/utils-aur.list"
+
+  show_header "Installing general utilities (AUR)."
+  check_installed "${aurutils}"
+  show_success "AUR utilities installed."
+}
+
+function install_laptop {
+  local laptop="${DIR}/packages/laptop.list"
+
+  show_header "Installing laptop utilities."
+  check_installed "${laptop}"
+  show_success "Laptop utilities installed."
+
+  # Enable tlp on laptops.
+  show_info "Enabling and starting tlp systemd units."
+  sudo systemctl enable tlp.service
+  sudo systemctl start tlp.service
+  show_success "tlp enabled."
+}
+
+function install_plymouth {
+  local plymouth="${DIR}/packages/plymouth.list"
+  local plymouthkde="${DIR}/packages/plymouth-kde.list"
+  local mkinitcpioconf="/etc/mkinitcpio.conf"
+  local grubconf="/etc/default/grub"
+
+  show_header "Installing Plymouth splash screen."
+  check_installed "${plymouth}"
+  show_success "Plymouth installed."
+
+  if pacman -Qi plasma-desktop > /dev/null 2>&1; then
+    show_header "KDE Plasma installed. Installing Plymouth integration."
+    check_installed "${plymouthkde}"
+    show_success "Plymouth integration installed."
+  fi
+
+  show_info "Enabling Plymouth in mkinitcpio.conf."
+  if ! grep -q "^HOOKS=(.*plymouth.*)$" "${mkinitcpioconf}"; then
+    # Insert the Plymouth hook after kernel mode setting.
+    sudo sed -i '/^HOOKS=/s/ kms / kms plymouth /' "${mkinitcpioconf}"
+    sudo mkinitcpio -P
+  fi
+
+  if [ -f "${grubconf}" ] && ! sudo grep -q "^GRUB_CMDLINE_LINUX_DEFAULT=.*splash" "${grubconf}"; then
+    show_info "Updating GRUB defaults for splash screen."
+    sudo sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/s/"$/ splash"/g' "${grubconf}"
+    sudo grub-mkconfig -o /boot/grub/grub.cfg
+  fi
+
+  if [ "$(sudo bootctl is-installed)" = yes ]; then
+    show_info "Updating Gummiboot entries for Plymouth splash screen."
+    local efidir
+    local conf
+    efidir="$(bootctl -p)"
+    while read -r conf; do
+      if ! grep -q "^options.*splash" "${conf}"; then
+        sudo sed -i "/^options/s/$/ splash/" "${conf}"
+      fi
+    done < <(sudo find "${efidir}"/loader/entries/ -name "*.conf")
+  fi
+}
+
+function 01-misc {
+  show_question "Misc: what do you want to install?"
+  show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+
+  local options=(
+    "Back"
+    "All"
+    "Linux hardened kernel"
+    "Linux LTS kernel"
+    "Linux RT kernel"
+    "Linux RT LTS kernel"
+    "Linux zen kernel"
+    "Linux utilities"
+    "Laptop tools"
+    "Plymouth"
+    "Zsh")
+  local option
+  select option in "${options[@]}"; do
+    case "${option}" in
+      "Back")
+        break
+        ;;
+      "All")
+        install_linux_hardened
+        install_linux_lts
+        install_linux_rt
+        install_linux_rt_lts
+        install_linux_zen
+        install_utils
+        install_utils_aur
+        install_laptop
+        install_plymouth
+        install_zsh
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Linux hardened kernel")
+        install_linux_hardened
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Linux LTS kernel")
+        install_linux_lts
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Linux RT kernel")
+        install_linux_rt
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Linux RT LTS kernel")
+        install_linux_rt_lts
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Linux zen kernel")
+        install_linux_zen
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Linux utilities")
+        install_utils
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Linux utilities (AUR)")
+        install_utils_aur
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Laptop tools")
+        install_laptop
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Plymouth")
+        install_plymouth
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Zsh")
+        install_zsh
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      *)
+        show_warning "Invalid option."
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+    esac
+  done
+}

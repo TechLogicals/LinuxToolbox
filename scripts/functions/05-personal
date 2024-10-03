@@ -1,0 +1,1921 @@
+#!/bin/bash
+
+
+
+DIR="$(dirname "$0")"
+
+# Globals
+GTKTHEME="Adwaita-dark"
+PLASMATHEME="Breeze-Dark"
+ICONTHEME="Breeze-Dark"
+FONT="Roboto"
+KERNEL="linux"
+
+function select_system_font {
+  show_question "Select a font family:"
+
+  local options=("Back" "Default" "Noto" "Roboto")
+  local option
+  select option in "${options[@]}"; do
+    case "${option}" in
+      "Back")
+        return
+        ;;
+      "Default")
+        FONT="Default"
+        break
+        ;;
+      "Noto")
+        if pacman -Qi noto-fonts > /dev/null 2>&1; then
+          FONT="Noto"
+        else
+          show_warning "Font family ${option@Q} not found. Skipping."
+        fi
+        break
+        ;;
+      "Roboto")
+        if pacman -Qi ttf-roboto > /dev/null 2>&1; then
+          FONT="Roboto"
+        else
+          show_warning "Font family ${option@Q} not found. Skipping."
+        fi
+        break
+        ;;
+      *)
+        show_error "Font ${option@Q} not supported."
+        exit 3
+        ;;
+    esac
+  done
+
+  set_system_font
+}
+
+function set_system_font {
+  show_header "Setting system font to ${FONT@Q}."
+
+  case "${FONT}" in
+    "Default")
+      if dpkg -s cinnamon > /dev/null 2>&1; then
+        show_info "Resetting fonts for Cinnamon desktop environment."
+
+        # screensaver fonts
+        gsettings reset org.cinnamon.desktop.screensaver font-message
+        gsettings reset org.cinnamon.desktop.screensaver font-date
+        gsettings reset org.cinnamon.desktop.screensaver font-time
+
+        # desktop environment fonts
+        gsettings reset org.cinnamon.desktop.interface font-name
+        gsettings reset org.nemo.desktop font
+        gsettings reset org.gnome.desktop.interface document-font-name
+        gsettings reset org.gnome.desktop.interface monospace-font-name
+        gsettings reset org.cinnamon.desktop.wm.preferences titlebar-font
+      fi
+
+      if dpkg -s gnome-shell > /dev/null 2>&1; then
+        show_info "Resetting fonts for GNOME environment."
+
+        # desktop environment fonts
+        gsettings reset org.gnome.desktop.wm.preferences titlebar-font
+        gsettings reset org.gnome.desktop.interface document-font-name
+        gsettings reset org.gnome.desktop.interface font-name
+        gsettings reset org.gnome.desktop.interface monospace-font-name
+
+        # gnome-shell font
+        if [ -f "${HOME}/.local/share/themes/Adwaita/gnome-shell/gnome-shell.css" ]; then
+          sed -i -e "s,^\(\s\+font-size: [0-9\.]\+pt;\?\),/* \1 */,g" \
+            "${HOME}/.local/share/themes/Adwaita/gnome-shell/gnome-shell.css"
+        fi
+      fi
+
+      if dpkg -s plasma-desktop > /dev/null 2>&1; then
+        show_info "Resetting fonts for KDE Plasma."
+        local kwconfig
+        local qdb
+        if kwconfig="$(_get_kwrite_config)"; then
+          "${kwconfig}" --file kdeglobals --group "General" --key "font" --delete
+          "${kwconfig}" --file kdeglobals --group "General" --key "menuFont" --delete
+          "${kwconfig}" --file kdeglobals --group "General" --key "smallestReadableFont" --delete
+          "${kwconfig}" --file kdeglobals --group "General" --key "toolBarFont" --delete
+          "${kwconfig}" --file kdeglobals --group "WM" --key "activeFont" --delete
+          "${kwconfig}" --file kdeglobals --group "General" --key "fixed" --delete
+          if qdb="$(_get_qdbus)"; then
+            if "${qdb}" org.kde.KWin > /dev/null; then
+              "${qdb}" org.kde.KWin /KWin reconfigure
+            fi
+          fi
+        fi
+      fi
+      ;;
+    "Roboto")
+      if pacman -Qi cinnamon > /dev/null 2>&1; then
+        show_info "Setting fonts for Cinnamon desktop environment."
+
+        # screensaver fonts
+        gsettings set org.cinnamon.desktop.screensaver font-message "'Roboto 14'"
+        gsettings set org.cinnamon.desktop.screensaver font-date "'Roboto 24'"
+        gsettings set org.cinnamon.desktop.screensaver font-time "'Roboto 64'"
+
+        # desktop environment fonts
+        gsettings set org.cinnamon.desktop.interface font-name "'Roboto 10.3'"
+        gsettings set org.nemo.desktop font "'Roboto 10.3'"
+        gsettings set org.gnome.desktop.interface document-font-name "'Roboto 10.3'"
+
+        # monospace font
+        if grep -q "Jambo.*Mono" <(fc-list); then
+          gsettings set org.gnome.desktop.interface monospace-font-name "'Jambo Mono 9.3'"
+        else
+          show_warning "Jambo Mono font not found. Falling back to Ubuntu Mono."
+          if pacman -Qi ttf-ubuntu-font-family > /dev/null 2>&1; then
+            gsettings set org.gnome.desktop.interface monospace-font-name "'Ubuntu Mono 10.9'"
+          else
+            show_warning "Ubuntu font family missing..."
+          fi
+        fi
+
+        # titlebar font
+        gsettings set org.cinnamon.desktop.wm.preferences titlebar-font "'Roboto Medium 10.3'"
+      fi
+
+      if pacman -Qi gnome-shell > /dev/null 2>&1; then
+        show_info "Setting fonts for GNOME environment."
+
+        # desktop environment fonts
+        gsettings set org.gnome.desktop.wm.preferences titlebar-font "'Roboto Medium 10.3'"
+        gsettings set org.gnome.desktop.interface document-font-name "'Roboto 10.3'"
+        gsettings set org.gnome.desktop.interface font-name "'Roboto 10.3'"
+
+        # gnome-shell font
+        if [ -f "${HOME}/.local/share/themes/Adwaita/gnome-shell/gnome-shell.css" ]; then
+          sed -i \
+            -e "s,^/\*\s\(\s\+font-size: .*;\?\) \*/$,\1,g" \
+            -e "s,font-size: [0-9\.]\+pt,font-size: 10.3pt,g" \
+            "${HOME}/.local/share/themes/Adwaita/gnome-shell/gnome-shell.css"
+        fi
+
+        # monospace font
+        if grep -q "Jambo.*Mono" <(fc-list); then
+          gsettings set org.gnome.desktop.interface monospace-font-name "'Jambo Mono 9.3'"
+        else
+          show_warning "Jambo Mono font not found. Falling back to Ubuntu Mono."
+          if pacman -Qi ttf-ubuntu-font-family > /dev/null 2>&1; then
+            gsettings set org.gnome.desktop.interface monospace-font-name "'Ubuntu Mono 10.9'"
+          else
+            show_warning "Ubuntu font family missing..."
+          fi
+        fi
+      fi
+
+      if pacman -Qi plasma-desktop > /dev/null 2>&1; then
+        show_info "Setting fonts for KDE Plasma."
+        local kwconfig
+        local qdb
+
+        if kwconfig="$(_get_kwrite_config)"; then
+          "${kwconfig}" --file kdeglobals --group "General" --key "font" "Roboto,10,-1,5,50,0,0,0,0,0"
+          "${kwconfig}" --file kdeglobals --group "General" --key "menuFont" "Roboto,10,-1,5,50,0,0,0,0,0"
+          "${kwconfig}" --file kdeglobals --group "General" --key "smallestReadableFont" "Roboto,8,-1,5,50,0,0,0,0,0"
+          "${kwconfig}" --file kdeglobals --group "General" --key "toolBarFont" "Roboto,10,-1,5,50,0,0,0,0,0"
+          "${kwconfig}" --file kdeglobals --group "WM" --key "activeFont" "Roboto,10,-1,5,50,0,0,0,0,0"
+          if grep -q "Jambo.*Mono" <(fc-list); then
+            "${kwconfig}" --file kdeglobals --group "General" --key "fixed" "Jambo Mono,9,-1,5,50,0,0,0,0,0"
+          else
+            show_warning "Jambo Mono font not found. Falling back to Ubuntu Mono."
+            if pacman -Qi ttf-ubuntu-font-family > /dev/null 2>&1; then
+              "${kwconfig}" --file kdeglobals --group "General" --key "fixed" "Ubuntu Mono,10,-1,5,50,0,0,0,0,0"
+            else
+              show_warning "Ubuntu font family missing..."
+            fi
+          fi
+          if qdb="$(_get_qdbus)"; then
+            if "${qdb}" org.kde.KWin > /dev/null; then
+              "${qdb}" org.kde.KWin /KWin reconfigure
+            fi
+          fi
+        fi
+      fi
+      ;;
+    "Noto")
+      if pacman -Qi cinnamon > /dev/null 2>&1; then
+        show_info "Setting fonts for Cinnamon desktop environment."
+
+        # screensaver fonts
+        gsettings set org.cinnamon.desktop.screensaver font-message "'Noto Sans 14'"
+        gsettings set org.cinnamon.desktop.screensaver font-date "'Noto Sans 24'"
+        gsettings set org.cinnamon.desktop.screensaver font-time "'Noto Sans 64'"
+
+        # desktop environment fonts
+        gsettings set org.cinnamon.desktop.interface font-name "'Noto Sans 10.3'"
+        gsettings set org.nemo.desktop font "'Noto Sans 10.3'"
+        gsettings set org.gnome.desktop.interface document-font-name "'Noto Sans 10.3'"
+
+        # monospace font
+        if grep -q "Jambo.*Mono" <(fc-list); then
+          gsettings set org.gnome.desktop.interface monospace-font-name "'Jambo Mono 10.4'"
+        else
+          show_warning "Jambo Mono font not found. Falling back to Ubuntu Mono."
+          if pacman -Qi ttf-ubuntu-font-family > /dev/null 2>&1; then
+            gsettings set org.gnome.desktop.interface monospace-font-name "'Ubuntu Mono 11.7'"
+          else
+            show_warning "Ubuntu font family missing..."
+          fi
+        fi
+
+        # titlebar font
+        gsettings set org.cinnamon.desktop.wm.preferences titlebar-font "'Noto Sans Medium 10.3'"
+      fi
+
+      if pacman -Qi gnome-shell > /dev/null 2>&1; then
+        show_info "Setting fonts for GNOME environment."
+
+        # desktop environment fonts
+        gsettings set org.gnome.desktop.wm.preferences titlebar-font "'Noto Sans Medium 10.3'"
+        gsettings set org.gnome.desktop.interface document-font-name "'Noto Sans 10.3'"
+        gsettings set org.gnome.desktop.interface font-name "'Noto Sans 10.3'"
+
+        # gnome-shell font
+        if [ -f "${HOME}/.local/share/themes/Adwaita/gnome-shell/gnome-shell.css" ]; then
+          sed -i \
+            -e "s,^/\*\s\(\s\+font-size: .*;\?\) \*/$,\1,g" \
+            -e "s,font-size: [0-9\.]\+pt,font-size: 10.3pt,g" \
+            "${HOME}/.local/share/themes/Adwaita/gnome-shell/gnome-shell.css"
+        fi
+
+        # monospace font
+        if grep -q "Jambo.*Mono" <(fc-list); then
+          gsettings set org.gnome.desktop.interface monospace-font-name "'Jambo Mono 10.4'"
+        else
+          show_warning "Jambo Mono font not found. Falling back to Ubuntu Mono."
+          if pacman -Qi ttf-ubuntu-font-family > /dev/null 2>&1; then
+            gsettings set org.gnome.desktop.interface monospace-font-name "'Ubuntu Mono 11.7'"
+          else
+            show_warning "Ubuntu font family missing..."
+          fi
+        fi
+      fi
+
+      if pacman -Qi plasma-desktop > /dev/null 2>&1; then
+        local kwconfig
+        local qdb
+        if kwconfig="$(_get_kwrite_config)"; then
+          "${kwconfig}" --file kdeglobals --group "General" --key "font" "Noto Sans,10,-1,5,50,0,0,0,0,0"
+          "${kwconfig}" --file kdeglobals --group "General" --key "menuFont" "Noto Sans,10,-1,5,50,0,0,0,0,0"
+          "${kwconfig}" --file kdeglobals --group "General" --key "smallestReadableFont" "Noto Sans,8,-1,5,50,0,0,0,0,0"
+          "${kwconfig}" --file kdeglobals --group "General" --key "toolBarFont" "Noto Sans,10,-1,5,50,0,0,0,0,0"
+          "${kwconfig}" --file kdeglobals --group "WM" --key "activeFont" "Noto Sans,10,-1,5,50,0,0,0,0,0"
+          if grep -q "Jambo.*Mono" <(fc-list); then
+            "${kwconfig}" --file kdeglobals --group "General" --key "fixed" "Jambo Mono,10,-1,5,50,0,0,0,0,0"
+          else
+            show_warning "Jambo Mono font not found. Falling back to Ubuntu Mono."
+            if pacman -Qi ttf-ubuntu-font-family > /dev/null 2>&1; then
+              "${kwconfig}" --file kdeglobals --group "General" --key "fixed" "Ubuntu Mono,11,-1,5,50,0,0,0,0,0"
+            else
+              show_warning "Ubuntu font family missing..."
+            fi
+          fi
+          if qdb="$(_get_qdbus)"; then
+            if "${qdb}" org.kde.KWin > /dev/null; then
+              "${qdb}" org.kde.KWin /KWin reconfigure
+            fi
+          fi
+        fi
+      fi
+      ;;
+    *)
+      show_error "Font ${FONT@Q} not supported."
+      exit 3
+      ;;
+  esac
+}
+
+function set_icon_theme {
+  show_header "Setting desktop icon theme to ${ICONTHEME@Q}."
+
+  if pacman -Qi cinnamon > /dev/null 2>&1; then
+    show_info "Setting Cinnamon icon theme to ${ICONTHEME@Q}."
+    gsettings set org.cinnamon.desktop.interface icon-theme "'${ICONTHEME}'"
+  fi
+
+  if pacman -Qi gnome-shell > /dev/null 2>&1; then
+    show_info "Setting GNOME icon theme to ${ICONTHEME@Q}."
+    gsettings set org.gnome.desktop.interface icon-theme "'${ICONTHEME}'"
+  fi
+
+  if [ -e /usr/lib/plasma-changeicons ]; then
+    show_info "Setting Plasma icon theme to ${ICONTHEME@Q}."
+    /usr/lib/plasma-changeicons "${ICONTHEME}"
+  fi
+}
+
+function set_gtk_theme {
+  if pacman -Qi cinnamon > /dev/null 2>&1; then
+    show_info "Setting Cinnamon GTK theme to ${GTKTHEME@Q}."
+    gsettings set org.cinnamon.desktop.interface gtk-theme "'${GTKTHEME}'"
+    if [[ "${GTKTHEME}" =~ -Eta$ ]]; then
+      gsettings set org.cinnamon.theme name "'${GTKTHEME%-*}'"
+      gsettings set org.cinnamon.desktop.wm.preferences theme "'${GTKTHEME}'"
+    elif [[ "${GTKTHEME}" =~ -Compact$ ]]; then
+      gsettings set org.cinnamon.theme name "'${GTKTHEME%-*}'"
+      gsettings set org.cinnamon.desktop.wm.preferences theme "'${GTKTHEME}'"
+    elif [[ "${GTKTHEME}" =~ -Darker$ ]]; then
+      gsettings set org.cinnamon.theme name "'${GTKTHEME%er}'"
+    else
+      gsettings set org.cinnamon.theme name "'${GTKTHEME}'"
+    fi
+  fi
+
+  if pacman -Qi gnome-shell > /dev/null 2>&1; then
+    show_info "Setting GNOME GTK theme to ${GTKTHEME@Q}."
+    gsettings set org.gnome.desktop.wm.preferences theme "'${GTKTHEME}'"
+    if [[ "${GTKTHEME,,}" =~ dark ]]; then
+      gsettings set org.gnome.desktop.interface color-scheme "'prefer-dark'"
+    else
+      gsettings set org.gnome.desktop.interface color-scheme "'default'"
+    fi
+    gsettings set org.gnome.desktop.interface gtk-theme "'${GTKTHEME}'"
+    gnome-extensions enable "user-theme@gnome-shell-extensions.gcampax.github.com" || true
+    gsettings set org.gnome.shell.extensions.user-theme name "'${GTKTHEME}'"
+  fi
+
+  if pacman -Qi plasma-desktop > /dev/null 2>&1; then
+    show_info "Setting Plasma GTK theme to ${GTKTHEME@Q}."
+    local qdb
+    if qdb="$(_get_qdbus)"; then
+      if "${qdb}" org.kde.KWin > /dev/null; then
+        "${qdb}" org.kde.KWin /KWin reconfigure
+      fi
+    fi
+  fi
+
+  set_config_key_value "${HOME}/.xprofile" "export GTK_THEME" "${GTKTHEME}"
+  set_config_key_value \
+    "${HOME}/.config/environment.d/envvars.conf" "GTK_THEME" "${GTKTHEME}"
+}
+
+function set_plasma_theme {
+  show_header "Setting Plasma theme to ${PLASMATHEME@Q}."
+  local kwconfig
+  local qdb
+  if kwconfig="$(_get_kwrite_config)" && qdb="$(_get_qdbus)"; then
+    case "${PLASMATHEME,,}" in
+      arc)
+        plasma-apply-lookandfeel -a com.github.sudorook.arc
+        "${qdb}" org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.setGtkTheme "Arc"
+        "${kwconfig}" --file kdeglobals --group "KDE" --key "widgetStyle" "kvantum"
+        kvantummanager --set Arc
+        ;;
+      arcdark | arc-dark)
+        plasma-apply-lookandfeel -a com.github.sudorook.arc-dark
+        "${qdb}" org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.setGtkTheme "Arc-Dark"
+        "${kwconfig}" --file kdeglobals --group "KDE" --key "widgetStyle" "kvantum"
+        kvantummanager --set ArcDark
+        ;;
+      arc-darker | arcdarker)
+        plasma-apply-lookandfeel -a com.github.sudorook.arc-darker
+        "${qdb}" org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.setGtkTheme "Arc-Darker"
+        "${kwconfig}" --file kdeglobals --group "KDE" --key "widgetStyle" "kvantum"
+        kvantummanager --set ArcDarker
+        ;;
+      breeze)
+        plasma-apply-lookandfeel -a org.kde.breeze.desktop
+        "${qdb}" org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.setGtkTheme "Breeze"
+        "${kwconfig}" --file kdeglobals --group "KDE" --key "widgetStyle" "Breeze"
+        ;;
+      breeze-dark | breezedark)
+        plasma-apply-lookandfeel -a org.kde.breezedark.desktop
+        "${qdb}" org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.setGtkTheme "Breeze"
+        "${kwconfig}" --file kdeglobals --group "KDE" --key "widgetStyle" "Breeze"
+        ;;
+      breeze-twilight | breezetwilight)
+        plasma-apply-lookandfeel -a org.kde.breezetwilight.desktop
+        "${qdb}" org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.setGtkTheme "Breeze"
+        "${kwconfig}" --file kdeglobals --group "KDE" --key "widgetStyle" "Breeze"
+        ;;
+      materia)
+        plasma-apply-lookandfeel -a com.github.sudorook.materia
+        "${qdb}" org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.setGtkTheme "Materia"
+        "${kwconfig}" --file kdeglobals --group "KDE" --key "widgetStyle" "kvantum"
+        kvantummanager --set Materia
+        ;;
+      materiadark | materia-dark)
+        plasma-apply-lookandfeel -a com.github.sudorook.materia-dark
+        "${qdb}" org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.setGtkTheme "Materia-dark"
+        "${kwconfig}" --file kdeglobals --group "KDE" --key "widgetStyle" "kvantum"
+        kvantummanager --set MateriaDark
+        ;;
+      materialight | materia-light)
+        plasma-apply-lookandfeel -a com.github.sudorook.materia-light
+        "${qdb}" org.kde.GtkConfig /GtkConfig org.kde.GtkConfig.setGtkTheme "Materia-light"
+        "${kwconfig}" --file kdeglobals --group "KDE" --key "widgetStyle" "kvantum"
+        kvantummanager --set MateriaLight
+        ;;
+    esac
+  fi
+}
+
+function set_lightdm_theme {
+  local lightdmgtkconf="/etc/lightdm/lightdm-gtk-greeter.conf"
+  if pacman -Qi lightdm-gtk-greeter > /dev/null 2>&1; then
+    show_header "Setting LightDM login GTK theme to ${GTKTHEME@Q}."
+    sudo sed -i "s/^#theme-name=$/theme-name=/g" ${lightdmgtkconf}
+    sudo sed -i "s/^theme-name=.*/theme-name=${GTKTHEME}/g" ${lightdmgtkconf}
+    sudo sed -i "s/^#icon-theme-name=$/icon-theme-name=/g" ${lightdmgtkconf}
+    sudo sed -i "s/^icon-theme-name=.*$/icon-theme-name=${ICONTHEME}/g" ${lightdmgtkconf}
+    if [[ "${FONT}" == "Noto" ]]; then
+      if pacman -Qi noto-fonts > /dev/null 2>&1; then
+        sudo sed -i "s/^#font-name=$/font-name=/g" ${lightdmgtkconf}
+        sudo sed -i "s/^font-name=.*/font-name=Noto Sans/g" ${lightdmgtkconf}
+      fi
+    elif [[ "${FONT}" == "Roboto" ]]; then
+      if pacman -Qi ttf-roboto > /dev/null 2>&1; then
+        sudo sed -i "s/^#font-name=$/font-name=/g" ${lightdmgtkconf}
+        sudo sed -i "s/^font-name=.*/font-name=Roboto/g" ${lightdmgtkconf}
+      fi
+    fi
+    sudo sed -i "s/^#xft-hintstyle=$/xft-hintstyle=/g" ${lightdmgtkconf}
+    sudo sed -i "s/^xft-hintstyle=.*$/xft-hintstyle=slight/g" ${lightdmgtkconf}
+  else
+    show_warning "LightDM GTK greeter not installed. Skipping."
+  fi
+}
+
+function set_gdm_theme {
+  local gtkthemedir
+  if pacman -Qi gdm > /dev/null 2>&1; then
+    if [[ -d "/usr/local/share/themes/${GTKTHEME}" ]]; then
+      gtkthemedir="/usr/local/share/themes/${GTKTHEME}"
+    elif [[ -d "${HOME}/.local/share/themes/${GTKTHEME}" ]]; then
+      gtkthemedir="${HOME}/.local/share/themes/${GTKTHEME}"
+    elif [[ -d "${HOME}/.themes/${GTKTHEME}" ]]; then
+      gtkthemedir="${HOME}/.themes/${GTKTHEME}"
+    elif [[ -d "/usr/share/themes/${GTKTHEME}" ]]; then
+      gtkthemedir="/usr/share/themes/${GTKTHEME}"
+    else
+      show_warning "GTK theme ${GTKTHEME@Q} not found. Skipping."
+      return
+    fi
+    show_header "Setting GDM login theme to ${GTKTHEME@Q}."
+    sudo cp -r "/usr/share/gnome-shell" "/usr/share/gnome-shell-$(date +%Y%m%d-%H%M%S)"
+    if [[ "${GTKTHEME}" =~ ^Adapta ]] || [[ "${GTKTHEME}" =~ ^Plata ]]; then
+      sudo cp -rf \
+        "${gtkthemedir}"/gnome-shell/* \
+        /usr/share/gnome-shell/
+      sudo cp -f \
+        "${gtkthemedir}"/gnome-shell/extensions/window-list/classic.css \
+        /usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com/
+      sudo cp -f \
+        "${gtkthemedir}"/gnome-shell/extensions/window-list/stylesheet.css \
+        /usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com/
+    elif [[ "${GTKTHEME}" =~ ^Materia ]]; then
+      sudo glib-compile-resources \
+        --target="/usr/share/gnome-shell/gnome-shell-theme.gresource" \
+        --sourcedir="${gtkthemedir}/gnome-shell" \
+        "${gtkthemedir}/gnome-shell/gnome-shell-theme.gresource.xml"
+    elif [[ "${GTKTHEME}" =~ ^Arc ]]; then
+      if [[ "${GTKTHEME}" =~ Dark ]]; then
+        if [ -f "${gtkthemedir}/gnome-shell/gnome-shell-theme-dark.gresource" ]; then
+          sudo cp -f "${gtkthemedir}/gnome-shell/gnome-shell-theme-dark.gresource" \
+            "/usr/share/gnome-shell/gnome-shell-theme.gresource"
+        fi
+      else
+        if [ -f "${gtkthemedir}/gnome-shell/gnome-shell-theme.gresource" ]; then
+          sudo cp -f "${gtkthemedir}/gnome-shell/gnome-shell-theme.gresource" \
+            "/usr/share/gnome-shell/gnome-shell-theme.gresource"
+        fi
+      fi
+    elif [[ "${GTKTHEME}" =~ ^Adwaita ]]; then
+      show_info "Reinstalling GNOME-shell to reset theme files."
+      sudo pacman -S --noconfirm gnome-shell gnome-shell-extensions
+    else
+      show_warning "${GTKTHEME@Q} theme for GDM is unsupported."
+    fi
+  else
+    show_warning "GDM is not installed. Skipping."
+  fi
+}
+
+function set_sddm_theme {
+  local sddmconf="/etc/sddm.conf.d/kde_settings.conf"
+  local sddmtheme
+  if [[ "${PLASMATHEME}" =~ ^breeze ]]; then
+    sddmtheme=breeze
+  else
+    sddmtheme=${PLASMATHEME}
+  fi
+  if pacman -Qi sddm > /dev/null 2>&1; then
+    if [ -d "/usr/share/sddm/themes/${sddmtheme}" ]; then
+      show_header "Setting SDDM login theme to ${sddmtheme@Q}."
+      local kwconfig
+      if kwconfig="$(_get_kwrite_config)"; then
+        sudo "${kwconfig}" --file "${sddmconf}" --group Theme --key Current "${sddmtheme}"
+        if [[ "${sddmtheme}" = breeze ]]; then
+          sudo "${kwconfig}" --file "${sddmconf}" --group Theme --key CursorTheme "breeze_cursors"
+        fi
+        case "${FONT}" in
+          Noto)
+            if pacman -Qi noto-fonts > /dev/null 2>&1; then
+              sudo "${kwconfig}" --file "${sddmconf}" --group Theme --key Font "Noto Sans,10,-1,5,50,0,0,0,0,0"
+            fi
+            ;;
+          Roboto)
+            if pacman -Qi ttf-roboto > /dev/null 2>&1; then
+              sudo "${kwconfig}" --file "${sddmconf}" --group Theme --key Font "Roboto,10,-1,5,50,0,0,0,0,0"
+            fi
+            ;;
+          *) ;;
+        esac
+      fi
+    else
+      show_warning "SDDM theme for ${PLASMATHEME@Q} not found. Skipping."
+    fi
+  else
+    show_warning "SDDM not installed. Skipping."
+  fi
+}
+
+function set_bash_shell {
+  local bashrc="${DIR}/dotfiles/bashrc"
+  local bashprofile="${DIR}/dotfiles/bash_profile"
+
+  if ! command -v bash > /dev/null 2>&1; then
+    show_warning "bash not installed. Skipping."
+    return
+  fi
+
+  if ! grep -q "bash" <(getent passwd "$(whoami)"); then
+    show_info "Changing login shell to Bash. Provide your password."
+    chsh -s /bin/bash
+  else
+    show_info "Default shell already set to bash."
+  fi
+
+  copy_config_file "${bashprofile}" "${HOME}/.bash_profile"
+  copy_config_file "${bashrc}" "${HOME}/.bashrc"
+}
+
+function set_zsh_shell {
+  local zshrc="${DIR}/dotfiles/zshrc"
+  local p10krc="${DIR}/dotfiles/p10k"
+
+  if ! command -v zsh > /dev/null 2>&1; then
+    show_warning "Zsh not installed. Skipping."
+    return
+  fi
+
+  if ! grep -q "zsh" <(getent passwd "$(whoami)"); then
+    show_info "Changing login shell to Zsh. Provide your password."
+    chsh -s /bin/zsh
+  else
+    show_info "Default shell already set to Zsh."
+  fi
+
+  mkdir -p "${HOME}/.local/share/zsh/site-functions"
+
+  copy_config_file "${zshrc}" "${HOME}/.zshrc"
+  copy_config_file "${p10krc}" "${HOME}/.p10k.zsh"
+}
+
+function set_login_shell {
+  local options=(
+    "Back"
+    "bash"
+    "zsh"
+  )
+  local option
+  select option in "${options[@]}"; do
+    case "${option}" in
+      "Back")
+        return
+        ;;
+      "bash")
+        set_bash_shell
+        break
+        ;;
+      "zsh")
+        set_zsh_shell
+        break
+        ;;
+    esac
+  done
+}
+
+function set_dark_gtk {
+  local gtksettings="${HOME}/.config/gtk-3.0/settings.ini"
+  local isgtkdark
+
+  show_header "Setting global dark theme for gtk applications."
+  mkdir -p "$(dirname "${gtksettings}")"
+  if [ -f "${gtksettings}" ]; then
+    if grep -q ^gtk-application-prefer-dark-theme= "${gtksettings}"; then
+      isgtkdark=$(sed -n 's/^gtk-application-prefer-dark-theme\s*=\s*\(.*\)\s*/\1/p' "${gtksettings}")
+      if test "${isgtkdark}"; then
+        show_info "Desktop is already set to use dark GTK variants."
+      else
+        sed -i "s/^gtk-application-prefer-dark-theme=${isgtkdark}$/gtk-application-prefer-dark-theme=1/g" "${gtksettings}"
+      fi
+    else
+      if grep -q "^\[Settings\]" "${gtksettings}"; then
+        sed -i "/^\[Settings\]/a gtk-application-prefer-dark-theme=1" "${gtksettings}"
+      else
+        cat >> "${gtksettings}" << EOF
+
+[Settings]
+gtk-application-prefer-dark-theme=1
+EOF
+      fi
+    fi
+  else
+    cat > "${gtksettings}" << EOF
+[Settings]
+gtk-application-prefer-dark-theme=1
+EOF
+  fi
+}
+
+function import_cinnamon_dconf {
+  local cinnamondconf="${DIR}/dconf/cinnamon.dconf"
+  show_header "Importing Cinnamon dconf settings."
+  dconf load / < "${cinnamondconf}"
+  show_success "Cinnamon dconf settings imported."
+}
+
+function import_gnome_dconf {
+  local gnomedconf="${DIR}/dconf/gnome.dconf"
+  show_header "Importing GNOME dconf settings."
+  dconf load / < "${gnomedconf}"
+  show_success "GNOME dconf settings imported."
+}
+
+function hide_avahi_apps {
+  local systemappsdir="/usr/share/applications"
+  local localappsdir="${HOME}/.local/share/applications"
+  show_header "Hiding Avahi applications."
+  local avahiapps=("avahi-discover" "bssh" "bvnc")
+  local app
+  mkdir -p "${localappsdir}"
+  for app in "${avahiapps[@]}"; do
+    cp "${systemappsdir}/${app}.desktop" "${localappsdir}/"
+    echo "Hidden=true" >> "${localappsdir}/${app}.desktop"
+  done
+}
+
+function import_kde_settings {
+  show_header "Setting default Plasma behavior."
+  local kwconfig
+  local qdb
+  if kwconfig="$(_get_kwrite_config)"; then
+    show_info "Adding Cinnamon-like desktop shortcuts."
+    "${kwconfig}" --file kglobalshortcutsrc --group "kwin" --key "Overview" "Ctrl+Alt+Up,Meta+W,Toggle Overview"
+    case "${kwconfig}" in
+      kwriteconfig6)
+        "${kwconfig}" --file kglobalshortcutsrc --group "kwin" --key "Grid View" "Ctrl+Alt+Down	Meta+G,Meta+G,Toggle Grid View"
+        ;;
+      kwriteconfig5)
+        "${kwconfig}" --file kglobalshortcutsrc --group "kwin" --key "ShowDesktopGrid" "Ctrl+Alt+Down	Meta+F8,Meta+F8,Show Desktop Grid"
+        ;;
+    esac
+    "${kwconfig}" --file kglobalshortcutsrc --group "kwin" --key "Switch to Next Desktop" "Ctrl+Alt+Right,,Switch to Next Desktop"
+    "${kwconfig}" --file kglobalshortcutsrc --group "kwin" --key "Switch to Previous Desktop" "Ctrl+Alt+Left,,Switch to Previous Desktop"
+    "${kwconfig}" --file kglobalshortcutsrc --group "kwin" --key "Window to Next Desktop" "Ctrl+Alt+Shift+Right,,Window to Next Desktop"
+    "${kwconfig}" --file kglobalshortcutsrc --group "kwin" --key "Window to Previous Desktop" "Ctrl+Alt+Shift+Left,,Window to Previous Desktop"
+
+    # Disable 'Overview' hot-corner.
+    case "${kwconfig}" in
+      kwriteconfig6)
+        "${kwconfig}" --file kwinrc --group "Effect-overview" --key "BorderActivate" "9"
+        ;;
+    esac
+
+    # Use 'Automatic' virtual desktop layout for overview, and display desktop name labels.
+    "${kwconfig}" --file kwinrc --group "Effect-desktopgrid" --key "DesktopLayoutMode" "1"     # automatic
+    "${kwconfig}" --file kwinrc --group "Effect-desktopgrid" --key "DesktopNameAlignment" "68"  # desktop names at bottom
+
+    # Dim screen when in administer mode.
+    case "${kwconfig}" in
+      kwriteconfig6)
+        "${kwconfig}" --file kwinrc --group "Plugins" --key "dimscreenEnabled" "true"
+        ;;
+      kwriteconfig5)
+        "${kwconfig}" --file kwinrc --group "Plugins" --key "kwin4_effect_dimscreenEnabled" "true"
+        ;;
+    esac
+
+    # Change desktop viewer animations.
+    case "${kwconfig}" in
+      kwriteconfig6)
+        "${kwconfig}" --file kwinrc --group "Plugins" --key "eyeonscreenEnabled" "true"
+        "${kwconfig}" --file kwinrc --group "Plugins" --key "windowapertureEnabled" "false"
+        ;;
+      kwriteconfig5)
+        "${kwconfig}" --file kwinrc --group "Plugins" --key "kwin4_effect_eyeonscreenEnabled" "true"
+        "${kwconfig}" --file kwinrc --group "Plugins" --key "kwin4_effect_windowapertureEnabled" "false"
+        ;;
+    esac
+
+    # Don't focus alt-tab windows.
+    "${kwconfig}" --file kwinrc --group "TabBox" --key "HighlightWindows" "false"
+
+    # Move minimized windows to end of alt-tab list.
+    "${kwconfig}" --file kwinrc --group "TabBox" --key "OrderMinimizedMode" "1"
+
+    # Use thumbnail-grid for alt-tab switcher.
+    "${kwconfig}" --file kwinrc --group "TabBox" --key "LayoutName" "thumbnail_grid"   # thumbnail grid
+
+    # Increase delay for showing the alt-tab OSD.
+    "${kwconfig}" --file kwinrc --group "TabBox" --key "DelayTime" "180"  # ?
+
+    # Disable auto-mount login service.
+    "${kwconfig}" --file kded5rc --group "Module-device_automounter" --key "autoload" "false"
+
+    # Show workspace switcher OSD and adjust default settings.
+    "${kwconfig}" --file kwinrc --group "Plugins" --key "desktopchangeosdEnabled" "true"
+    "${kwconfig}" --file kwinrc --group "Windows" --key "RollOverDesktops" "true"
+    case "${kwconfig}" in
+      kwriteconfig6)
+        "${kwconfig}" --file kwinrc --group "Plugins" --key "fadedesktopEnabled" "true"
+        "${kwconfig}" --file kwinrc --group "Plugins" --key "trackMouseEnabled" "true"
+        ;;
+      kwriteconfig5)
+        "${kwconfig}" --file kwinrc --group "Plugins" --key "kwin4_effect_fadedesktopEnabled" "true"
+        ;;
+    esac
+    "${kwconfig}" --file kwinrc --group "Plugins" --key "slideEnabled" "false"
+    "${kwconfig}" --file kwinrc --group "Script-desktopchangeosd" --key "PopupHideDelay" "300"  # speed up switcher OSD
+    "${kwconfig}" --file kwinrc --group "Script-desktopchangeosd" --key "TextOnly" "true"
+
+    # Disable software (Discover) search in krunner.
+    "${kwconfig}" --file krunnerrc --group "Plugins" --key "appstreamEnabled" "false"
+
+    # Increase notification time.
+    "${kwconfig}" --file plasmanotifyrc --group "Notifications" --key "PopupTimeout" "10000"
+
+    # Use 'smart' new window placement.
+    "${kwconfig}" --file kwinrc --group "Windows" --key "Placement" "Smart"
+
+    # Reduce window shadows in breeze theme.
+    "${kwconfig}" --file breezerc --group "Common" --key "ShadowSize" "ShadowSmall"
+    "${kwconfig}" --file breezerc --group "Common" --key "ShadowStrength" "64"
+
+    # Make cursor waiting animation static.
+    "${kwconfig}" --file klaunchrc --group "BusyCursorSettings" --key "Bouncing" "false"
+
+    # Double-click to open.
+    "${kwconfig}" --file kdeglobals --group "KDE" --key "SingleClick" "false"
+
+    # Speed up global animations.
+    "${kwconfig}" --file kdeglobals --group "KDE" --key "AnimationDurationFactor" "0.5"
+
+    # Disable Baloo indexing of file contents.
+    "${kwconfig}" --file baloofilerc --group "General" --key "only basic indexing" "true"
+
+    # Disable plasma software update notifications.
+    "${kwconfig}" --file PlasmaDiscoverUpdates --group "Global" --key "RequiredNotificationInterval" "1"  # need to convert to -1
+    sed -i "s/^RequiredNotificationInterval=1$/RequiredNotificationInterval=-1/g" "${HOME}/.config/PlasmaDiscoverUpdates"
+
+    # Disable top-left corner effect.
+    "${kwconfig}" --file kwinrc --group "Effect-windowview" --key "BorderActivateAll" "9"
+
+    # Remove desktop scrolling behavior.
+    "${kwconfig}" --file plasma-org.kde.plasma.desktop-appletsrc --group "ActionPlugins" --group "0" --key "wheel:Vertical;NoModifier" --delete
+
+    local touchpad
+    while read -r touchpad; do
+      local hex1
+      local hex2
+      hex1="$(echo "${touchpad}" | cut -d" " -f2 | cut -d":" -f1)"
+      hex2="$(echo "${touchpad}" | cut -d" " -f2 | cut -d":" -f2)"
+      hex1=$((16#"${hex1}"))
+      hex2=$((16#"${hex2}"))
+      if [ -n "${hex1}" ] && [ -n "${hex2}" ]; then
+        "${kwconfig}" --file kcminputrc --group "Libinput" --group "${hex1}" --group "${hex2}" --group "${touchpad}" --key "Enabled" "true"
+        "${kwconfig}" --file kcminputrc --group "Libinput" --group "${hex1}" --group "${hex2}" --group "${touchpad}" --key "NaturalScroll" "true"
+        "${kwconfig}" --file kcminputrc --group "Libinput" --group "${hex1}" --group "${hex2}" --group "${touchpad}" --key "TapToClick" "true"
+      fi
+    done < <(grep -i touchpad /proc/bus/input/devices | sed -n "s/.*\"\(.*\)\"$/\1/p")
+
+    # List desktop shortcuts top-to-bottom.
+    "${kwconfig}" --file plasma-org.kde.plasma.desktop-appletsrc --group "Containments" --group "1" --group "General" --key "arrangement" "1"
+
+    # Disable folder preview in Desktop
+    "${kwconfig}" --file plasma-org.kde.plasma.desktop-appletsrc --group "Containments" --group "1" --group "General" --key "previewPlugins" "appimagethumbnail,audiothumbnail,blenderthumbnail,comicbookthumbnail,cursorthumbnail,djvuthumbnail,ebookthumbnail,exrthumbnail,fontthumbnail,imagethumbnail,jpegthumbnail,kraorathumbnail,windowsexethumbnail,windowsimagethumbnail,mltpreview,mobithumbnail,opendocumentthumbnail,gsthumbnail,quithumbnail,rawthumbnail,svgthumbnail,ffmpegthumbs"
+
+    # Disable screen dimming on idle.
+    "${kwconfig}" --file powermanagementprofilesrc --group "AC" --group "DimDisplay" --key "idleTime" --delete
+    "${kwconfig}" --file powermanagementprofilesrc --group "Battery" --group "DimDisplay" --key "idleTime" --delete
+    "${kwconfig}" --file powermanagementprofilesrc --group "LowBattery" --group "DimDisplay" --key "idleTime" --delete
+    "${kwconfig}" --file powermanagementprofilesrc --group "LowBattery" --group "BrightnessControl" --key "value" --delete
+
+    # Change power notification settings.
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/criticalbattery" --key "Execute" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/criticalbattery" --key "Logfile" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/criticalbattery" --key "TTS" ""
+
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/fullbattery" --key "Action" "Popup"
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/fullbattery" --key "Execute" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/fullbattery" --key "Logfile" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/fullbattery" --key "TTS" ""
+
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/lowbattery" --key "Action" "Popup"
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/lowbattery" --key "Execute" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/lowbattery" --key "Logfile" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/lowbattery" --key "TTS" ""
+
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/lowperipheralbattery" --key "Action" "Popup"
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/lowperipheralbattery" --key "Execute" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/lowperipheralbattery" --key "Logfile" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/lowperipheralbattery" --key "TTS" ""
+
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/pluggedin" --key "Action" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/pluggedin" --key "Execute" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/pluggedin" --key "Logfile" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/pluggedin" --key "TTS" ""
+
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/unplugged" --key "Action" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/unplugged" --key "Execute" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/unplugged" --key "Logfile" ""
+    "${kwconfig}" --file powerdevil.notifyrc --group "Event/unplugged" --key "TTS" ""
+
+    # Remove file size limit for Trash
+    "${kwconfig}" --file ktrashrc --group "${HOME}/.local/share/Trash" --key "UseSizeLimit" "false"
+
+    # Do not prompt to clear clipboard.
+    "${kwconfig}" --file plasmashellrc --group "Notification Messages" --key "klipperClearHistoryAskAgain" "false"
+
+    # Do not save non-text to clipboard.
+    "${kwconfig}" --file klipperrc --group "General" --key "SelectionTextOnly" "false"
+
+    # Dolphin settings.
+    "${kwconfig}" --file dolphinrc --group "General" --key "GlobalViewProps" "false"  # enable per-directory view style (e.g. sort by name, date modified, etc.)
+    "${kwconfig}" --file dolphinrc --group "General" --key "BrowseThroughArchives" "true"  # open archives as folders
+    "${kwconfig}" --file kdeglobals --group "KDE" --key "ShowDeleteCommand" "true"  # show delete command in menu
+    "${kwconfig}" --file kservicemenurc --group "Show" --key "runInKonsole" "false" # disable 'run in konsole' option in dolphin
+    "${kwconfig}" --file kiorc --group "Confirmations" --key "ConfirmDelete" "false"
+    "${kwconfig}" --file kiorc --group "Confirmations" --key "ConfirmEmptyTrash" "false"
+    "${kwconfig}" --file dolphinrc --group "General" --key "ConfirmClosingMultipleTabs" "false"
+    "${kwconfig}" --file dolphinrc --group "PreviewSettings" --key "Plugins" "appimagethumbnail,audiothumbnail,blenderthumbnail,comicbookthumbnail,cursorthumbnail,djvuthumbnail,ebookthumbnail,exrthumbnail,fontthumbnail,imagethumbnail,jpegthumbnail,kraorathumbnail,windowsexethumbnail,windowsimagethumbnail,mltpreview,mobithumbnail,opendocumentthumbnail,gsthumbnail,quithumbnail,rawthumbnail,svgthumbnail,ffmpegthumbs"  # disable folder image previews
+    "${kwconfig}" --file dolphinrc --group "KFileDialog Settings" --key "Places Icons Auto-resize" "true"  # auto-resize the icons
+    "${kwconfig}" --file dolphinrc --group "PlacesPanel" --key "IconSize" "1"  # change to -1 later
+    sed -i "s/^IconSize=1$/IconSize=-1/g" "${HOME}/.config/dolphinrc"
+    "${kwconfig}" --file dolphinrc --group "MainWindow" --group "Toolbar mainToolBar" --key "ToolButtonStyle" "IconOnly"  # icon-only menus in toolbar
+
+    # Stop notification sound when emptying trash.
+    "${kwconfig}" --file plasma_workspace.notifyrc --group "Event/Trash: emptied" --key "Action" ""
+    "${kwconfig}" --file plasma_workspace.notifyrc --group "Event/Trash: emptied" --key "Execute" ""
+    "${kwconfig}" --file plasma_workspace.notifyrc --group "Event/Trash: emptied" --key "Logfile" ""
+    "${kwconfig}" --file plasma_workspace.notifyrc --group "Event/Trash: emptied" --key "TTS" ""
+
+    show_info "Adjusting Okular default settings."
+    "${kwconfig}" --file okularrc --group "MainWindow" --group "Toolbar mainToolBar" --key "ToolButtonStyle" "IconOnly" # icons-only menus
+    "${kwconfig}" --file okularrc --group "MainWindow" --key "MenuBar" "Disabled"
+    "${kwconfig}" --file okularpartrc --group "PageView" --key "SmoothScrolling" "false"
+    "${kwconfig}" --file okularpartrc --group "PageView" --key "TrimMargins" "true"
+    "${kwconfig}" --file okularpartrc --group "Core Performance" --key "MemoryLevel" "Aggressive"
+
+    show_info "Adjusting gwenview default settings."
+    "${kwconfig}" --file gwenviewrc --group "ImageView" --key "AnimationMethod" "DocumentView::NoAnimation"
+    "${kwconfig}" --file gwenviewrc --group "ImageView" --key "MouseWheelBehavior" "MouseWheelBehavior::Zoom"
+    "${kwconfig}" --file gwenviewrc --group "ImageView" --key "EnlargeSmallerImages" "true"
+    "${kwconfig}" --file gwenviewrc --group "ThumbnailView" --key "ListVideos" "false"
+
+    if qdb="$(_get_qdbus)"; then
+      if "${qdb}" org.kde.KWin > /dev/null; then
+        "${qdb}" org.kde.KWin /KWin reconfigure
+      fi
+    fi
+  fi
+
+  # Because the Wayland protocol does not allow for global keylogging needed to
+  # detect global shortcuts, shortcut handling for Plasma wayland is built
+  # directly into KWin itself. On X11, KGlobalAccel handles this instead. The
+  # consequence of this is that when running DESKTOP_SESSION=plasmax11 (Plasma
+  # 6) or plasma (Plasma 5), restarting KGlobalAccel will update the shortcuts,
+  # but when DESKTOP_SESSION=plasma (Plasma 6) or plasmawayland (Plasma), KWin
+  # (and therefore the entire session) needs to be restarted instead.
+  #
+  # See: https://blog.martin-graesslin.com/blog/2015/06/global-shortcut-handling-in-a-plasma-wayland-session/
+  case "${XDG_SESSION_TYPE:-}" in
+    x11)
+      case "${DESKTOP_SESSION:-}" in
+        plasmax11)
+          kquitapp6 kglobalaccel
+          nohup kstart /usr/lib/kglobalacceld > /dev/null 2>&1
+          ;;
+        plasma)
+          kquitapp5 kglobalaccel || killall kglobalaccel5
+          sleep 2s
+          nohup kstart5 kglobalaccel5 --window --windowclass > /dev/null 2>&1
+          ;;
+      esac
+      ;;
+    wayland)
+      if pidof -x kwin_wayland > /dev/null; then
+        kwin_wayland --replace
+      fi
+      ;;
+  esac
+  show_success "Done! Reload Plasma to update settings."
+}
+
+function import_apps_dconf {
+  local appsdconf="${DIR}/dconf/apps.dconf"
+  show_header "Importing application dconf settings."
+  dconf load / < "${appsdconf}"
+  show_success "Application dconf settings imported."
+}
+
+function import_terminal_dconf {
+  local terminaldconf="${DIR}/dconf/terminal.dconf"
+  show_header "Importing terminal profiles."
+  dconf load / < "${terminaldconf}"
+  show_success "GNOME terminal profiles imported."
+}
+
+function enable_autologin {
+  local gdmconf="/etc/gdm/custom.conf"
+  local lightdmconf="/etc/lightdm/lightdm.conf"
+  local sddmconf="/etc/sddm.conf.d/kde_settings.conf"
+
+  show_header "Enabling automatic login for ${USER@Q}."
+  local is_autologin_set=false
+
+  if pacman -Qi gdm > /dev/null 2>&1; then
+    show_info "Log in as ${USER@Q} via GDM."
+    ! [ -f ${gdmconf} ] && sudo touch ${gdmconf}
+    if ! grep -q "^AutomaticLogin=${USER}" ${gdmconf}; then
+      ! grep -q '^\[daemon\]' "${gdmconf}" &&
+        sudo sh -c "echo '[daemon]' >> ${gdmconf}"
+      sudo sed -i "/^\[daemon\]$/a AutomaticLogin=${USER}" "${gdmconf}"
+      sudo sed -i "/^AutomaticLogin=/a AutomaticLoginEnable=true" "${gdmconf}"
+    else
+      sudo sed -i "s/^AutomaticLogin=.*$/AutomaticLogin=${USER}/g" ${gdmconf}
+      sudo sed -i "s/^AutomaticLoginEnable=.*$/AutomaticLoginEnable=true/g" ${gdmconf}
+    fi
+    is_autologin_set=true
+  fi
+
+  if pacman -Qi lightdm > /dev/null 2>&1; then
+    show_info "Log in as ${USER@Q} via LightDM."
+    if ! grep -q autologin <(getent group); then
+      sudo groupadd -r autologin
+    fi
+    if ! [[ $(groups) =~ autologin ]]; then
+      sudo gpasswd -a "${USER}" autologin
+    fi
+    sudo sed -i "s/^#autologin-user=/autologin-user=/g" ${lightdmconf}
+    sudo sed -i "s/^#autologin-user-timeout=/autologin-user-timeout=/g" ${lightdmconf}
+    sudo sed -i "s/^autologin-user=.*$/autologin-user=${USER}/g" ${lightdmconf}
+    is_autologin_set=true
+  fi
+
+  if pacman -Qi sddm > /dev/null 2>&1; then
+    show_info "Log in as ${USER@Q} via SDDM."
+    local kwconfig
+    local plasmaversion
+    plasmaversion="$(plasmashell --version)"
+    if kwconfig="$(_get_kwrite_config)"; then
+      if ! [ -d /etc/sddm.conf.d/ ]; then
+        sudo mkdir /etc/sddm.conf.d/
+        sudo touch "${sddmconf}"
+
+        sudo "${kwconfig}" --file "${sddmconf}" --group Autologin --key Relogin "false"
+        if [[ "${plasmaversion}" =~ 6\.[0-9]+\.[0-9]+$ ]]; then
+          sudo "${kwconfig}" --file "${sddmconf}" --group Autologin --key Session "${DESKTOP_SESSION:-plasma}"
+        elif [[ "${plasmaversion}" =~ 5\.[0-9]+\.[0-9]+$ ]]; then
+          sudo "${kwconfig}" --file "${sddmconf}" --group Autologin --key Session "${DESKTOP_SESSION:-plasmawayland}"
+        fi
+        sudo "${kwconfig}" --file "${sddmconf}" --group Autologin --key User "${USER}"
+
+        sudo "${kwconfig}" --file "${sddmconf}" --group General --key HaltCommand ""
+        sudo "${kwconfig}" --file "${sddmconf}" --group General --key RebootCommand ""
+
+        sudo "${kwconfig}" --file "${sddmconf}" --group Theme --key Current ""
+
+        sudo "${kwconfig}" --file "${sddmconf}" --group Users --key MaximumUid 60000
+        sudo "${kwconfig}" --file "${sddmconf}" --group Users --key MinimumUid 1000
+      else
+        sudo "${kwconfig}" --file "${sddmconf}" --group Autologin --key Relogin "false"
+        if [[ "${plasmaversion}" =~ 6\.[0-9]+\.[0-9]+$ ]]; then
+          sudo "${kwconfig}" --file "${sddmconf}" --group Autologin --key Session "${DESKTOP_SESSION:-plasma}"
+        elif [[ "${plasmaversion}" =~ 5\.[0-9]+\.[0-9]+$ ]]; then
+          sudo "${kwconfig}" --file "${sddmconf}" --group Autologin --key Session "${DESKTOP_SESSION:-plasmawayland}"
+        fi
+        sudo "${kwconfig}" --file "${sddmconf}" --group Autologin --key User "${USER}"
+      fi
+      is_autologin_set=true
+    fi
+  fi
+
+  if "${is_autologin_set}"; then
+    show_success "Autologin enabled."
+  else
+    show_warning "Failed to detect display manager. Autologin not enabled."
+  fi
+}
+
+function invert_brightness {
+  local grubdefault="/etc/default/grub"
+  local grubcfg="/boot/grub/grub.cfg"
+  if [ -f "${grubdefault}" ]; then
+    local oldline
+    local bootparams
+    oldline=$(grep ^GRUB_CMDLINE_LINUX= "${grubdefault}")
+    bootparams=$(echo "${oldline}" | sed -n "s/^GRUB_CMDLINE_LINUX=\"\(.*\)\"/\1/p")
+    show_header "Inverting display brightness (Intel i915)."
+    if [[ ${bootparams} =~ i915.invert_brightness= ]]; then
+      sudo sed -i "s|i915.invert_brightness=\(on\|off\|1\|0\)|i915.invert_brightness=1|g" ${grubdefault}
+    else
+      if test "${bootparams}"; then
+        sudo sed -i "s|${bootparams}|${bootparams} i915.invert_brightness=1|g" ${grubdefault}
+      else
+        sudo sed -i "s|${oldline}|GRUB_CMDLINE_LINUX=\"i915.invert_brightness=1\"|g" ${grubdefault}
+      fi
+      sudo sed -i "\|^GRUB_CMDLINE_LINUX=| a\#${oldline}" ${grubdefault} # backup
+      show_success "Brightness inverted."
+      sudo grub-mkconfig -o ${grubcfg}
+    fi
+  fi
+  if [[ "$(sudo bootctl is-installed)" = yes ]]; then
+    local cmdline
+    local entry
+    for entry in "$(bootctl -p)"/loader/entries/*.conf; do
+      cmdline=$(sed -n "s/^options\s\+\(.*\)/\1/p" "${entry}")
+      if [[ ${cmdline} =~ i915.invert_brightness= ]]; then
+        sudo sed -i "s|i915.invert_brightness=\(1\|0\)|i915.invert_brightness=1|g" "${entry}"
+      else
+        if test "${cmdline}"; then
+          sudo sed -i "s|${cmdline}|${cmdline} i915.invert_brightness=1|g" ${grubdefault}
+        else
+          echo "options	i915.invert_brightness=1" | sudo tee -a "${entry}"
+        fi
+      fi
+    done
+  fi
+}
+
+function enable_intel_iommu {
+  local grubdefault="/etc/default/grub"
+  local grubcfg="/boot/grub/grub.cfg"
+  local vendor
+  vendor="$(lscpu | sed -n "s,^Vendor ID: \+\([A-Za-z]\+\),\1,p")"
+  if [[ "$vendor" =~ "Intel" ]]; then
+    show_info "Setting Intel IOMMU kernel parameter."
+    if [ -f "${grubdefault}" ]; then
+      local oldline
+      local bootparams
+      oldline=$(grep ^GRUB_CMDLINE_LINUX= "${grubdefault}")
+      bootparams=$(echo "${oldline}" | sed -n "s/^GRUB_CMDLINE_LINUX=\"\(.*\)\"/\1/p")
+      if [[ ${bootparams} =~ intel_iommu= ]]; then
+        sudo sed -i "s|intel_iommu=\(on\|off\|0\|1\)|intel_iommu=on|g" ${grubdefault}
+      else
+        if test "${bootparams}"; then
+          sudo sed -i "s|${bootparams}|${bootparams} intel_iommu=on|g" ${grubdefault}
+        else
+          sudo sed -i "s|${oldline}|GRUB_CMDLINE_LINUX=\"intel_iommu=on\"|g" ${grubdefault}
+        fi
+        sudo sed -i "\|^GRUB_CMDLINE_LINUX=| a\#${oldline}" ${grubdefault} # backup
+        sudo grub-mkconfig -o ${grubcfg}
+      fi
+    fi
+    if [[ "$(sudo bootctl is-installed)" = yes ]]; then
+      local cmdline
+      local entry
+      for entry in "$(bootctl -p)"/loader/entries/*.conf; do
+        cmdline=$(sed -n "s/^options\s\+\(.*\)/\1/p" "${entry}")
+        if [[ ${cmdline} =~ intel_iommu= ]]; then
+          sudo sed -i "s|intel_iommu=\(1\|0\)|intel_iommu=on|g" "${entry}"
+        else
+          if test "${cmdline}"; then
+            sudo sed -i "s|${cmdline}|${cmdline} intel_iommu=on|g" ${grubdefault}
+          else
+            echo "options	intel_iommu=on" | sudo tee -a "${entry}"
+          fi
+        fi
+      done
+    fi
+  else
+    show_warning "Cannot set intel_iommu=on on non-Intel CPU. Skipping."
+  fi
+}
+
+function disable_pulseaudio_suspend {
+  local pulseconfig="/etc/pulse/default.pa"
+  show_header "Disabling suspend on PulseAudio when sinks/sources idle."
+  if [ -f ${pulseconfig} ]; then
+    sudo sed -i "s/^load-module module-suspend-on-idle$/#load-module module-suspend-on-idle/g" ${pulseconfig}
+  else
+    show_warning "PulseAudio config file missing. Skipping."
+  fi
+}
+
+function disable_11n {
+  local iwlwificonf="/etc/modprobe.d/iwlwifi.conf"
+  show_header "Disabling 802.11n networking in iwlwifi."
+  if ! [ "$(ls -A /etc/modprobe.d/)" ]; then
+    sudo sh -c "echo 'options iwlwifi 11n_disable=1' >> ${iwlwificonf}"
+  else
+    if ! find /etc/modprobe.d/ -type f \
+         -exec grep -q "^options iwlwifi .*11n_disable=1.*" {} +; then
+      sudo sh -c "echo 'options iwlwifi 11n_disable=1' >> ${iwlwificonf}"
+    else
+      show_info "11n_disable=1 flag is already set."
+    fi
+  fi
+  show_success "802.11n networking disabled in ${iwlwificonf@Q}."
+}
+
+function install_scripts {
+  local autostartdir="${HOME}/.config/autostart"
+  local scriptdir="${HOME}/.scripts"
+  local batterydaemon="${DIR}/daemons/battery.desktop"
+
+  show_header "Installing misc. scripts to the ${scriptdir@Q} folder."
+  if [ -d "${HOME}/.scripts" ]; then
+    git -C "${HOME}/.scripts" pull
+  else
+    git clone https://github.com/sudorook/misc-scripts.git "${scriptdir}"
+    show_info "Be sure to populate '${scriptdir}/globals'."
+  fi
+  show_success "Installed."
+
+  show_info "Setting up battery notifications."
+  mkdir -p "${autostartdir}"
+  sed -e "s,@misc-scripts@,${scriptdir},g" "${batterydaemon}" \
+    > "${autostartdir}/battery-watchdog.desktop"
+}
+
+function select_gtk_theme {
+  show_question "Select a GTK theme:"
+
+  local options=(
+    "Back"
+    "Adwaita"
+    "Adwaita-dark"
+    "Arc"
+    "Arc-Darker"
+    "Arc-Dark"
+    "Arc-Lighter"
+    "Adapta"
+    "Adapta-Eta"
+    "Adapta-Nokto"
+    "Adapta-Nokto-Eta"
+    "Materia"
+    "Materia-compact"
+    "Materia-dark"
+    "Materia-dark-compact"
+    "Materia-light"
+    "Materia-light-compact"
+    "Plata"
+    "Plata-Compact"
+    "Plata-Lumine"
+    "Plata-Lumine-Compact"
+    "Plata-Noir"
+    "Plata-Noir-Compact")
+  local option
+  select option in "${options[@]}"; do
+    case "${option}" in
+      "Back")
+        return
+        ;;
+      "Adwaita")
+        if [ -d /usr/share/themes/Adwaita ]; then
+          GTKTHEME="Adwaita"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Adwaita-dark")
+        if [ -d /usr/share/themes/Adwaita-dark ]; then
+          GTKTHEME="Adwaita-dark"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Arc")
+        if [ -d /usr/share/themes/Arc ] ||
+           [ -d /usr/local/share/themes/Arc ] ||
+           [ -d "${HOME}/.local/share/themes/Arc" ] ||
+           [ -d "${HOME}/.themes/Arc" ]; then
+          GTKTHEME="Arc"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Arc-Darker")
+        if [ -d /usr/share/themes/Arc-Darker ] ||
+           [ -d /usr/local/share/themes/Arc-Darker ] ||
+           [ -d "${HOME}/.local/share/themes/Arc-Darker" ] ||
+           [ -d "${HOME}/.themes/Arc-Darker" ]; then
+          GTKTHEME="Arc-Darker"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Arc-Dark")
+        if [ -d /usr/share/themes/Arc-Dark ] ||
+           [ -d /usr/local/share/themes/Arc-Dark ] ||
+           [ -d "${HOME}/.local/share/themes/Arc-Dark" ] ||
+           [ -d "${HOME}/.themes/Arc-Dark" ]; then
+          GTKTHEME="Arc-Dark"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Arc-Lighter")
+        if [ -d /usr/share/themes/Arc-Lighter ] ||
+           [ -d /usr/local/share/themes/Arc-Lighter ] ||
+           [ -d "${HOME}/.local/share/themes/Arc-Lighter" ] ||
+           [ -d "${HOME}/.themes/Arc-Lighter" ]; then
+          GTKTHEME="Arc-Lighter"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Adapta")
+        if [ -d /usr/share/themes/Adapta ] ||
+           [ -d /usr/local/share/themes/Adapta ] ||
+           [ -d "${HOME}/.local/share/themes/Adapta" ] ||
+           [ -d "${HOME}/.themes/Adapta" ]; then
+          GTKTHEME="Adapta"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Adapta-Eta")
+        if [ -d /usr/share/themes/Adapta-Eta ] ||
+           [ -d /usr/local/share/themes/Adapta-Eta ] ||
+           [ -d "${HOME}/.local/share/themes/Adapta-Eta" ] ||
+           [ -d "${HOME}/.themes/Adapta-Eta" ]; then
+          GTKTHEME="Adapta-Eta"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Adapta-Nokto")
+        if [ -d /usr/share/themes/Adapta-Nokto ] ||
+           [ -d /usr/local/share/themes/Adapta-Nokto ] ||
+           [ -d "${HOME}/.local/share/themes/Adapta-Nokto" ] ||
+           [ -d "${HOME}/.themes/Adapta-Nokto" ]; then
+          GTKTHEME="Adapta-Nokto"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Adapta-Nokto-Eta")
+        if [ -d /usr/share/themes/Adapta-Nokto-Eta ] ||
+           [ -d /usr/local/share/themes/Adapta-Nokto-Eta ] ||
+           [ -d "${HOME}/.local/share/themes/Adapta-Nokto-Eta" ] ||
+           [ -d "${HOME}/.themes/Adapta-Nokto-Eta" ]; then
+          GTKTHEME="Adapta-Nokto-Eta"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Materia")
+        if [ -d /usr/share/themes/Materia ] ||
+           [ -d /usr/local/share/themes/Materia ] ||
+           [ -d "${HOME}/.local/share/themes/Materia" ] ||
+           [ -d "${HOME}/.themes/Materia" ]; then
+          GTKTHEME="Materia"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Materia-compact")
+        if [ -d /usr/share/themes/Materia-compact ] ||
+           [ -d /usr/local/share/themes/Materia-compact ] ||
+           [ -d "${HOME}/.local/share/themes/Materia-compact" ] ||
+           [ -d "${HOME}/.themes/Materia-compact" ]; then
+          GTKTHEME="Materia-compact"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Materia-light")
+        if [ -d /usr/share/themes/Materia-light ] ||
+           [ -d /usr/local/share/themes/Materia-light ] ||
+           [ -d "${HOME}/.local/share/themes/Materia-light" ] ||
+           [ -d "${HOME}/.themes/Materia-light" ]; then
+          GTKTHEME="Materia-light"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Materia-light-compact")
+        if [ -d /usr/share/themes/Materia-light-compact ] ||
+           [ -d /usr/local/share/themes/Materia-light-compact ] ||
+           [ -d "${HOME}/.local/share/themes/Materia-light-compact" ] ||
+           [ -d "${HOME}/.themes/Materia-light-compact" ]; then
+          GTKTHEME="Materia-light-compact"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Materia-dark")
+        if [ -d /usr/share/themes/Materia-dark ] ||
+           [ -d /usr/local/share/themes/Materia-dark ] ||
+           [ -d "${HOME}/.local/share/themes/Materia-dark" ] ||
+           [ -d "${HOME}/.themes/Materia-dark" ]; then
+          GTKTHEME="Materia-dark"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Materia-dark-compact")
+        if [ -d /usr/share/themes/Materia-dark-compact ] ||
+           [ -d /usr/local/share/themes/Materia-dark-compact ] ||
+           [ -d "${HOME}/.local/share/themes/Materia-dark-compact" ] ||
+           [ -d "${HOME}/.themes/Materia-dark-compact" ]; then
+          GTKTHEME="Materia-dark-compact"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Plata")
+        if [ -d /usr/share/themes/Plata ] ||
+           [ -d /usr/local/share/themes/Plata ] ||
+           [ -d "${HOME}/.local/share/themes/Plata" ] ||
+           [ -d "${HOME}/.themes/Plata" ]; then
+          GTKTHEME="Plata"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Plata-Compact")
+        if [ -d /usr/share/themes/Plata-Compact ] ||
+           [ -d /usr/local/share/themes/Plata-Compact ] ||
+           [ -d "${HOME}/.local/share/themes/Plata-Compact" ] ||
+           [ -d "${HOME}/.themes/Plata-Compact" ]; then
+          GTKTHEME="Plata-Compact"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Plata-Lumine")
+        if [ -d /usr/share/themes/Plata-Lumine ] ||
+           [ -d /usr/local/share/themes/Plata-Lumine ] ||
+           [ -d "${HOME}/.local/share/themes/Plata-Lumine" ] ||
+           [ -d "${HOME}/.themes/Plata-Lumine" ]; then
+          GTKTHEME="Plata-Lumine"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Plata-Lumine-Compact")
+        if [ -d /usr/share/themes/Plata-Lumine-Compact ] ||
+           [ -d /usr/local/share/themes/Plata-Lumine-Compact ] ||
+           [ -d "${HOME}/.local/share/themes/Plata-Lumine-Compact" ] ||
+           [ -d "${HOME}/.themes/Plata-Lumine-Compact" ]; then
+          GTKTHEME="Plata-Lumine-Compact"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Plata-Noir")
+        if [ -d /usr/share/themes/Plata-Noir ] ||
+           [ -d /usr/local/share/themes/Plata-Noir ] ||
+           [ -d "${HOME}/.local/share/themes/Plata-Noir" ] ||
+           [ -d "${HOME}/.themes/Plata-Noir" ]; then
+          GTKTHEME="Plata-Noir"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Plata-Noir-Compact")
+        if [ -d /usr/share/themes/Plata-Noir-Compact ] ||
+           [ -d /usr/local/share/themes/Plata-Noir-Compact ] ||
+           [ -d "${HOME}/.local/share/themes/Plata-Noir-Compact" ] ||
+           [ -d "${HOME}/.themes/Plata-Noir-Compact" ]; then
+          GTKTHEME="Plata-Noir-Compact"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      *)
+        show_warning "Invalid option ${option@Q}."
+        ;;
+    esac
+  done
+
+  set_gtk_theme
+  set_lightdm_theme
+  set_gdm_theme
+}
+
+function select_plasma_theme {
+  show_question "Select a Plasma theme:"
+
+  local options=(
+    "Back"
+    "Arc"
+    "Arc-Dark"
+    "Arc-Darker"
+    "Breeze"
+    "Breeze-dark"
+    "Breeze-twilight"
+    "Materia"
+    "Materia-dark"
+    "Materia-light")
+  local option
+  select option in "${options[@]}"; do
+    case "${option}" in
+      "Back")
+        return
+        ;;
+      "Arc")
+        if [ -d /usr/share/plasma/look-and-feel/com.github.sudorook.arc/ ] ||
+           [ -d /usr/local/share/plasma/look-and-feel/com.github.sudorook.arc/ ]; then
+          PLASMATHEME="Arc"
+          GTKTHEME="Arc"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Arc-Darker")
+        if [ -d /usr/share/plasma/look-and-feel/com.github.sudorook.arc-darker ] ||
+           [ -d /usr/local/share/plasma/look-and-feel/com.github.sudorook.arc-darker ]; then
+          PLASMATHEME="Arc-Darker"
+          GTKTHEME="Arc-Dark"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Arc-Dark")
+        if [ -d /usr/share/plasma/look-and-feel/com.github.sudorook.arc-dark ] ||
+           [ -d /usr/local/share/plasma/look-and-feel/com.github.sudorook.arc-dark ]; then
+          PLASMATHEME="Arc-Dark"
+          GTKTHEME="Arc-Dark"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Breeze")
+        if [ -d /usr/share/plasma/look-and-feel/org.kde.breeze.desktop ] ||
+           [ -d /usr/local/share/plasma/look-and-feel/org.kde.breeze.desktop ]; then
+          PLASMATHEME="breeze"
+          GTKTHEME="Breeze"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Breeze-dark")
+        if [ -d /usr/share/plasma/look-and-feel/org.kde.breezedark.desktop ] ||
+           [ -d /usr/local/share/plasma/look-and-feel/org.kde.breezedark.desktop ]; then
+          PLASMATHEME="breeze-dark"
+          GTKTHEME="Breeze"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Breeze-twilight")
+        if [ -d /usr/share/plasma/look-and-feel/org.kde.breezetwilight.desktop ] ||
+           [ -d /usr/local/share/plasma/look-and-feel/org.kde.breezetwilight.desktop ]; then
+          PLASMATHEME="breeze-twilight"
+          GTKTHEME="Breeze"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Materia")
+        if [ -d /usr/share/plasma/desktoptheme/Materia ] ||
+           [ -d /usr/local/share/plasma/desktoptheme/Materia ]; then
+          PLASMATHEME="Materia"
+          GTKTHEME="Materia"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Materia-light")
+        if [ -d /usr/share/plasma/desktoptheme/Materia-light ] ||
+           [ -d /usr/local/share/plasma/desktoptheme/Materia-light ]; then
+          PLASMATHEME="Materia-light"
+          GTKTHEME="Materia-light"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      "Materia-dark")
+        if [ -d /usr/share/plasma/desktoptheme/Materia-dark ] ||
+           [ -d /usr/local/share/plasma/desktoptheme/Materia-dark ]; then
+          PLASMATHEME="Materia-dark"
+          GTKTHEME="Materia-dark"
+          break
+        else
+          show_warning "${option@Q} theme is not installed."
+        fi
+        ;;
+      *)
+        show_warning "Invalid option ${option@Q}."
+        ;;
+    esac
+  done
+
+  set_plasma_theme
+  set_gtk_theme
+  set_sddm_theme
+}
+
+function select_icon_theme {
+  show_question "Select an icon theme:"
+
+  local options=(
+    "Back"
+    "Adwaita"
+    "Breeze"
+    "Breeze-Dark"
+    "Papirus"
+    "ePapirus"
+    "ePapirus-Dark"
+    "Papirus-Light"
+    "Papirus-Dark"
+    "Papirus-Adapta"
+    "Papirus-Adapta-Nokto")
+  local option
+  select option in "${options[@]}"; do
+    case "${option}" in
+      "Back")
+        return
+        ;;
+      "Adwaita")
+        if [ -d /usr/share/icons/Adwaita ]; then
+          ICONTHEME="Adwaita"
+          break
+        else
+          show_warning "${option@Q} icons are not installed."
+        fi
+        ;;
+      "Breeze")
+        if [ -d /usr/share/icons/breeze ]; then
+          ICONTHEME="breeze"
+          break
+        else
+          show_warning "${option@Q} icons are not installed."
+        fi
+        ;;
+      "Breeze-Dark")
+        if [ -d /usr/share/icons/breeze-dark ]; then
+          ICONTHEME="breeze-dark"
+          break
+        else
+          show_warning "${option@Q} icons are not installed."
+        fi
+        ;;
+      "Papirus")
+        if [ -d /usr/share/icons/Papirus ] ||
+           [ -d /usr/local/share/icons/Papirus ] ||
+           [ -d "${HOME}/.local/share/icons/Papirus" ] ||
+           [ -d "${HOME}/.icons/Papirus" ]; then
+          ICONTHEME="Papirus"
+          break
+        else
+          show_warning "${option@Q} icons are not installed."
+        fi
+        ;;
+      "ePapirus")
+        if [ -d /usr/share/icons/ePapirus ] ||
+           [ -d /usr/local/share/icons/ePapirus ] ||
+           [ -d "${HOME}/.local/share/icons/ePapirus" ] ||
+           [ -d "${HOME}/.icons/ePapirus" ]; then
+          ICONTHEME="ePapirus"
+          break
+        else
+          show_warning "${option@Q} icons are not installed."
+        fi
+        ;;
+      "ePapirus-Dark")
+        if [ -d /usr/share/icons/ePapirus-Dark ] ||
+           [ -d /usr/local/share/icons/ePapirus-Dark ] ||
+           [ -d "${HOME}/.local/share/icons/ePapirus-Dark" ] ||
+           [ -d "${HOME}/.icons/ePapirus-Dark" ]; then
+          ICONTHEME="ePapirus-Dark"
+          break
+        else
+          show_warning "${option@Q} icons are not installed."
+        fi
+        ;;
+      "Papirus-Light")
+        if [ -d /usr/share/icons/Papirus-Light ] ||
+           [ -d /usr/local/share/icons/Papirus-Light ] ||
+           [ -d "${HOME}/.local/share/icons/Papirus-Light" ] ||
+           [ -d "${HOME}/.icons/Papirus-Light" ]; then
+          ICONTHEME="Papirus-Light"
+          break
+        else
+          show_warning "${option@Q} icons are not installed."
+        fi
+        ;;
+      "Papirus-Dark")
+        if [ -d /usr/share/icons/Papirus-Dark ] ||
+           [ -d /usr/local/share/icons/Papirus-Dark ] ||
+           [ -d "${HOME}/.local/share/icons/Papirus-Dark" ] ||
+           [ -d "${HOME}/.icons/Papirus-Dark" ]; then
+          ICONTHEME="Papirus-Dark"
+          break
+        else
+          show_warning "${option@Q} icons are not installed."
+        fi
+        ;;
+      "Papirus-Adapta")
+        if [ -d /usr/share/icons/Papirus-Adapta ] ||
+           [ -d /usr/local/share/icons/Papirus-Adapta ] ||
+           [ -d "${HOME}/.local/share/icons/Papirus-Adapta" ] ||
+           [ -d "${HOME}/.icons/Papirus-Adapta" ]; then
+          ICONTHEME="Papirus-Adapta"
+          break
+        else
+          show_warning "${option@Q} icons are not installed."
+        fi
+        ;;
+      "Papirus-Adapta-Nokto")
+        if [ -d /usr/share/icons/Papirus-Adapta-Nokto ] ||
+           [ -d /usr/local/share/icons/Papirus-Adapta-Nokto ] ||
+           [ -d "${HOME}/.local/share/icons/Papirus-Adapta-Nokto" ] ||
+           [ -d "${HOME}/.icons/Papirus-Adapta-Nokto" ]; then
+          ICONTHEME="Papirus-Adapta-Nokto"
+          break
+        else
+          show_warning "${option@Q} icons are not installed."
+        fi
+        ;;
+      *)
+        show_warning "Invalid option ${option@Q}."
+        ;;
+    esac
+  done
+
+  set_icon_theme
+  set_lightdm_theme
+}
+
+function set_plymouth_theme {
+  local theme="${1:-default}"
+  if command -v plymouth-set-default-theme > /dev/null; then
+    case "${theme}" in
+      Back)
+        return
+        ;;
+      default)
+        sudo plymouth-set-default-theme -r -R
+        ;;
+      breeze-text)
+        show_warning "WARNING: ${theme@Q} not working as of 03/07/2024."
+        ;;
+      *)
+        sudo plymouth-set-default-theme -R "${theme}"
+        ;;
+    esac
+  else
+    show_warning "'plymouth-set-default-theme' executable not found. Skipping."
+  fi
+}
+
+function select_plymouth_theme {
+  if command -v plymouth-set-default-theme > /dev/null; then
+    show_info "Select Plymouth theme:"
+    local choice
+    local choices
+    mapfile -t choices < <(plymouth-set-default-theme -l)
+    select choice in Back default "${choices[@]}"; do
+      set_plymouth_theme "${choice}"
+      break
+    done
+  else
+    show_warning "'plymouth-set-default-theme' executable not found. Skipping."
+  fi
+}
+
+function set_default_kernel {
+  local grubdefault="/etc/default/grub"
+  local grubcfg="/boot/grub/grub.cfg"
+  local mksdbootcfg="${DIR}/utils/sdboot-mkconfig"
+
+  show_info "Setting default boot kernel to ${KERNEL}."
+
+  if [ -f "${grubdefault}" ]; then
+    sudo sed -i "s/^GRUB_DEFAULT=.*$/GRUB_DEFAULT='Advanced options for Arch Linux>Arch Linux, with Linux ${KERNEL}'/g" ${grubdefault}
+    sudo grub-mkconfig -o ${grubcfg}
+  fi
+
+  if [[ "$(sudo bootctl is-installed)" = yes ]]; then
+    local sdbootcfg
+    sdbootcfg="$(bootctl -p)/loader/loader.conf"
+    if ! [ -f "$(bootctl -p)/loader/entries/${KERNEL}.conf" ]; then
+      sudo "${mksdbootcfg}" "${KERNEL}"
+    fi
+    sudo sed -i "s/^default\(\s\+\)\(.*\)/default\1${KERNEL}.conf/g" "${sdbootcfg}"
+  fi
+}
+
+function select_default_kernel {
+  local kernellist
+  local kernels
+  local option
+
+  if [ "$(stat -c "%u" /boot)" -eq 0 ]; then
+    show_info "'/boot' owned by root. Searching as root:"
+    mapfile -t kernellist < \
+      <(sudo find /boot -maxdepth 1 -name 'vmlinuz-*' -type f -print0 |
+        xargs -0 -I _ basename _ |
+        sed -e "s/^vmlinuz-//g")
+  else
+    mapfile -t kernellist < \
+      <(find /boot -maxdepth 1 -name 'vmlinuz-*' -type f -print0 |
+        xargs -0 -I _ basename _ |
+        sed -e "s/^vmlinuz-//g")
+  fi
+
+  kernels=("Back" "${kernellist[@]}")
+
+  show_question "Select a default kernel:"
+  select option in "${kernels[@]}"; do
+    case "${option}" in
+      Back)
+        break
+        ;;
+      linux | linux-lts | linux-zen | linux-hardened | linux-rt | linux-rt-lts)
+        KERNEL="${option}"
+        set_default_kernel
+        break
+        ;;
+      *)
+        show_error "Invalid option ${option@Q}."
+        break
+        ;;
+    esac
+  done
+}
+
+function 05-personal {
+  show_question "Personal: what do you want to set?"
+  show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+
+  local options=(
+    "Back"
+    "All"
+    "Select system fonts"
+    "Select icon theme"
+    "Select GTK theme"
+    "Select Plasma theme"
+    "Select Plymouth theme"
+    "Set dark GTK"
+    "Select login shell"
+    "Import Cinnamon dconf"
+    "Import GNOME dconf"
+    "Hide Avahi programs"
+    "Import KDE settings"
+    "Import application dconf"
+    "Import GNOME terminal profiles"
+    "Enable autologin"
+    "Invert brightness (i915)"
+    "Enable IOMMU (Intel)"
+    "Disable PulseAudio suspend"
+    "Disable 802.11n"
+    "Add scripts"
+    "Select default kernel")
+  local option
+  select option in "${options[@]}"; do
+    case "${option}" in
+      "Back")
+        break
+        ;;
+      "All")
+        set_system_font
+        set_icon_theme
+        set_gtk_theme
+        set_plasma_theme
+        set_lightdm_theme
+        set_gdm_theme
+        set_sddm_theme
+        set_plymouth_theme
+        set_dark_gtk
+        set_login_shell
+        import_cinnamon_dconf
+        import_gnome_dconf
+        hide_avahi_apps
+        import_kde_settings
+        import_apps_dconf
+        import_terminal_dconf
+        enable_autologin
+        invert_brightness
+        enable_intel_iommu
+        disable_pulseaudio_suspend
+        disable_11n
+        install_scripts
+        set_default_kernel
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Select system fonts")
+        select_system_font
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Select icon theme")
+        select_icon_theme
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Select GTK theme")
+        select_gtk_theme
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Select Plasma theme")
+        select_plasma_theme
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Select Plymouth theme")
+        select_plymouth_theme
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Set dark GTK")
+        set_dark_gtk
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Select login shell")
+        set_login_shell
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Import Cinnamon dconf")
+        import_cinnamon_dconf
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Import KDE settings")
+        import_kde_settings
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Import GNOME dconf")
+        import_gnome_dconf
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Hide Avahi programs")
+        hide_avahi_apps
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Import application dconf")
+        import_apps_dconf
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Import GNOME terminal profiles")
+        import_terminal_dconf
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Enable autologin")
+        enable_autologin
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Invert brightness (i915)")
+        invert_brightness
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Enable IOMMU (Intel)")
+        enable_intel_iommu
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Disable PulseAudio suspend")
+        disable_pulseaudio_suspend
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Disable 802.11n")
+        disable_11n
+        show_info "Main\n ${ENDBRANCH} Network (Hit ENTER to see options again.)"
+        ;;
+      "Add scripts")
+        install_scripts
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "Select default kernel")
+        select_default_kernel
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      *)
+        show_warning "Invalid option ${option@Q}."
+        ;;
+    esac
+  done
+}

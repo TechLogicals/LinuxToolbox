@@ -1,0 +1,897 @@
+#!/bin/bash
+
+DIR="$(dirname "$0")"
+
+function install_3d_accel {
+  local accel="${DIR}/packages/3d-accel.list"
+  show_header "Installing mesa/vulkan packages for 3D acceleration."
+  check_installed "${accel}"
+  show_success "Video acceleration packages installed."
+}
+
+function install_android {
+  local android="${DIR}/packages/android.list"
+  show_header "Installing tools for Android devices."
+  check_installed "${android}"
+  show_success "Android tools installed."
+}
+
+function install_apps {
+  local apps="${DIR}/packages/apps.list"
+  local mpvconfig="${DIR}/configs/mpv.conf"
+  local mpvinputconfig="${DIR}/configs/mpv-input.conf"
+  local kittyconfig="${DIR}/configs/kitty.conf"
+  local libaoconf="/etc/libao.conf"
+  local keepassxcini="${DIR}/configs/keepassxc.ini"
+  local vimpack="${HOME}/.vim/pack/dist/start"
+
+  show_header "Installing desktop applications."
+  check_installed "${apps}"
+  show_success "Applications installed."
+
+  show_info "Copying mpv config."
+  mkdir -p "${HOME}/.config/mpv"
+  cp -f "${mpvconfig}" "${HOME}/.config/mpv/mpv.conf"
+  cp -f "${mpvinputconfig}" "${HOME}/.config/mpv/input.conf"
+
+  show_info "Copying kitty config."
+  mkdir -p "${HOME}/.config/kitty"
+  cp -f "${kittyconfig}" "${HOME}/.config/kitty/"
+
+  if ! [[ -e "${vimpack}/kitty.vim" ]]; then
+    show_info "Installing kitty.vim for Vim syntax highlighting."
+    git clone https://github.com/sudorook/kitty.vim.git \
+      "${vimpack}/kitty.vim"
+    "${vimpack}/kitty.vim/./build" > /dev/null # in case kitty rules are outdated
+  fi
+
+  show_info "Setting application MIME associations."
+  xdg-mime default firefox.desktop text/html
+  xdg-mime default org.gnome.Evince.desktop application/pdf
+  xdg-mime default org.gnome.eog.desktop image/bmp
+  xdg-mime default org.gnome.eog.desktop image/gif
+  xdg-mime default org.gnome.eog.desktop image/jpg
+  xdg-mime default org.gnome.eog.desktop image/jpeg
+  xdg-mime default org.gnome.eog.desktop image/png
+  xdg-mime default org.gnome.eog.desktop image/svg+xml
+  xdg-mime default org.gnome.eog.desktop image/tiff
+  xdg-mime default transmission-gtk.desktop application/x-bittorrent
+  xdg-mime default transmission-gtk.desktop x-scheme-handler/magnet
+
+  if [[ ${XDG_SESSION_TYPE,,} =~ wayland ]]; then
+    show_info "Setting environment variables for Firefox to use Wayland and VA-API."
+    mkdir -p "${HOME}/.config/environment.d"
+    set_config_key_value \
+      "${HOME}/.config/environment.d/envvars.conf" "MOZ_ENABLE_WAYLAND" "1"
+    set_config_key_value \
+      "${HOME}/.config/environment.d/envvars.conf" "MOZ_WAYLAND_USE_VAAPI" "1"
+  fi
+
+  show_info "Copying keepassxc config."
+  mkdir -p "${HOME}/.config/keepassxc"
+  cp -f "${keepassxcini}" "${HOME}/.config/keepassxc/"
+
+  show_info "Configuring ${libaoconf@Q} to use PulseAudio instead of ALSA."
+  sudo sh -c "echo 'default_driver=pulse' > ${libaoconf}"
+}
+
+function install_apps_kde {
+  local appskde="${DIR}/packages/apps-kde.list"
+  local mpvconfig="${DIR}/configs/mpv.conf"
+  local mpvinputconfig="${DIR}/configs/mpv-input.conf"
+  local kittyconfig="${DIR}/configs/kitty.conf"
+  local libaoconf="/etc/libao.conf"
+  local keepassxcini="${DIR}/configs/keepassxc.ini"
+  local vimpack="${HOME}/.vim/pack/dist/start"
+
+  show_header "Installing KDE desktop applications."
+  check_installed "${appskde}"
+  show_success "Applications installed."
+
+  show_info "Copying mpv config."
+  mkdir -p "${HOME}/.config/mpv"
+  cp -f "${mpvconfig}" "${HOME}/.config/mpv/mpv.conf"
+  cp -f "${mpvinputconfig}" "${HOME}/.config/mpv/input.conf"
+
+  show_info "Copying kitty config."
+  mkdir -p "${HOME}/.config/kitty"
+  cp -f "${kittyconfig}" "${HOME}/.config/kitty/"
+
+  if ! [[ -e "${vimpack}/kitty.vim" ]]; then
+    show_info "Installing kitty.vim for Vim syntax highlighting."
+    git clone https://github.com/sudorook/kitty.vim.git \
+      "${vimpack}/kitty.vim"
+    "${vimpack}/kitty.vim/./build" > /dev/null # in case kitty rules are outdated
+  fi
+
+  if [[ ${XDG_SESSION_TYPE,,} =~ wayland ]]; then
+    show_info "Setting environment variables for Firefox to use Wayland and VA-API."
+    mkdir -p "${HOME}/.config/environment.d"
+    set_config_key_value \
+      "${HOME}/.config/environment.d/envvars.conf" "MOZ_ENABLE_WAYLAND" "1"
+    set_config_key_value \
+      "${HOME}/.config/environment.d/envvars.conf" "MOZ_WAYLAND_USE_VAAPI" "1"
+  fi
+
+  show_info "Copying keepassxc config."
+  mkdir -p "${HOME}/.config/keepassxc"
+  cp -f "${keepassxcini}" "${HOME}/.config/keepassxc/"
+}
+
+function install_apps_aur {
+  local aur="${DIR}/packages/apps-aur.list"
+  show_header "Installing AUR applications."
+  check_aur_installed "${aur}"
+  show_success "Done!"
+}
+
+function install_apps_kde_aur {
+  local aurkde="${DIR}/packages/apps-kde-aur.list"
+  show_header "Installing KDE AUR applications."
+  check_aur_installed "${aurkde}"
+  show_success "Done!"
+}
+
+function install_codecs {
+  local codecs="${DIR}/packages/codecs.list"
+  show_header "Installing codecs."
+  check_installed "${codecs}"
+  show_success "Codecs installed."
+}
+
+function install_containers {
+  local containers="${DIR}/packages/container.list"
+  show_header "Installing container packages (containerd, LXC, Nomad, Podman)."
+  check_installed "${containers}"
+  show_success "Container packages installed."
+}
+
+function _install_julia {
+  local julia="${DIR}/package/julia.list"
+
+  show_info "Installing Julia packages."
+  julia -e \
+    "f = open(\"${julia}\"); pkg = readlines(f); close(f); import Pkg; Pkg.add(pkg)"
+}
+
+function _install_r {
+  local r="${DIR}/packages/r.list"
+
+  show_info "Installing Rprofile."
+  cp -f "${rprofile}" "${HOME}/.Rprofile"
+
+  show_info "Installing R packages."
+  if ! [[ -v R_LIBS_USER ]]; then
+    R_LIBS_USER="${HOME}/.R/$(R --version |
+      sed -n "s/^R version \([0-9\.]*\) .*/\1/p")"
+    export R_LIBS_USER
+  fi
+  mkdir -p "${R_LIBS_USER}"
+  Rscript <(
+    cat << EOF
+pkg <- readLines("${r}")
+install.packages(pkg,
+                 lib = "${R_LIBS_USER}",
+                 Ncpus = $(nproc),
+                 clean = TRUE,
+                 repo = 'https://cloud.r-project.org/')
+EOF
+  )
+}
+
+function _install_rust {
+  show_info "Installing rust stable toolchain."
+  rustup default stable
+
+  show_info "Building local cache of cargo crates."
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  git clone --depth 1 https://github.com/sudorook/crate_dl.git "${tmpdir}"
+  pushd "${tmpdir}" > /dev/null || exit
+  cargo fetch
+  popd > /dev/null || exit
+  rm -rf "${tmpdir}"
+}
+
+function install_dev {
+  local dev="${DIR}/packages/dev.list"
+  local npmrc="${DIR}/dotfiles/npmrc"
+  local rprofile="${DIR}/dotfiles/Rprofile"
+  local vimpack="${HOME}/.vim/pack/dist/start"
+
+  show_header "Installing languages, libraries, and tools for development."
+  check_installed "${dev}"
+  show_success "Development packages installed."
+
+  show_info "Setting Git global defaults."
+  git config --global init.defaultBranch master
+
+  show_info "Installing npmrc."
+  cp -f "${npmrc}" "${HOME}/.npmrc"
+
+  show_info "Setting up local lib dirs."
+  mkdir -p "${HOME}/.local/lib"
+  if [ -d "${HOME}/.local/lib64" ]; then
+    if ! [ -h "${HOME}/.local/lib64" ]; then
+      mv "${HOME}/.local/lib64/"* "${HOME}/.local/lib/"
+      rmdir "${HOME}/.local/lib64"
+    fi
+  elif [ -d "${HOME}/.local/lib64" ]; then
+    mv "${HOME}/.local/lib64" "${HOME}/.local/lib64.bak"
+  fi
+  ln -sf "${HOME}/.local/lib" "${HOME}/.local/lib64"
+
+  show_info "Setting default clang-format style."
+  clang-format -style=mozilla -dump-config > "${HOME}/.clang-format"
+
+  _install_julia
+  _install_r
+  _install_rust
+
+  show_info "Installing Vim packages."
+  mkdir -p "${vimpack}"
+
+  if ! [[ -e "${vimpack}/julia-vim" ]]; then
+    show_info "Installing julia-vim for Vim syntax highlighting."
+    git clone https://github.com/JuliaEditorSupport/julia-vim.git \
+      "${vimpack}/julia-vim"
+  fi
+
+  if ! [[ -e "${vimpack}/kotlin-vim" ]]; then
+    show_info "Installing kotlin-vim for Vim syntax highlighting."
+    git clone https://github.com/udalov/kotlin-vim.git \
+      "${vimpack}/kotlin-vim"
+  fi
+
+  if ! [[ -e "${vimpack}/Nvim-R" ]]; then
+    show_info "Installing Nvim-R."
+    git clone https://github.com/jalvesaq/Nvim-R.git "${vimpack}/Nvim-R"
+  fi
+}
+
+function install_dev_aur {
+  local devaur="${DIR}/packages/dev-aur.list"
+  show_header "Installing development packages from AUR."
+  check_installed "${devaur}"
+  show_success "Development packages installed."
+}
+
+function _configure_ytdlp {
+  local ytdlconf="${DIR}/configs/ytdl.conf"
+  show_info "Installing yt-dlp/youtube-dl config."
+  mkdir -p "${HOME}/.config/yt-dlp"
+  if ! [ -e "${HOME}/.config/youtube-dl" ]; then
+    ln -s "${HOME}/.config/yt-dlp" "${HOME}/.config/youtube-dl"
+  fi
+  cp -f "${ytdlconf}" "${HOME}/.config/yt-dlp/config"
+}
+
+function install_extra {
+  local extra="${DIR}/packages/extra.list"
+
+  show_header "Installing extra desktop applications."
+  check_installed "${extra}"
+  show_success "Extra applications installed."
+
+  set_config_key_value \
+    "${HOME}/.xprofile" "export CALIBRE_USE_SYSTEM_THEME" "1"
+  set_config_key_value \
+    "${HOME}/.config/environment.d/envvars.conf" "CALIBRE_USE_SYSTEM_THEME" "1"
+
+  _configure_ytdlp
+}
+
+function install_extra_kde {
+  local extrakde="${DIR}/packages/extra-kde.list"
+  local ytdlconf="${DIR}/configs/ytdl.conf"
+
+  show_header "Installing extra KDE desktop applications."
+  check_installed "${extrakde}"
+  show_success "Extra applications installed."
+
+  set_config_key_value \
+    "${HOME}/.xprofile" "export CALIBRE_USE_SYSTEM_THEME" "1"
+  set_config_key_value \
+    "${HOME}/.config/environment.d/envvars.conf" "CALIBRE_USE_SYSTEM_THEME" "1"
+
+  _configure_ytdlp
+}
+
+function install_pipewire {
+  local pipewire="${DIR}/packages/pipewire.list"
+  show_header "Installing PipeWire A/V processor."
+  check_installed "${pipewire}"
+  show_success "Pipewire installed."
+}
+
+function install_printing {
+  local printer="${DIR}/packages/printer.list"
+  show_header "Installing CPUS and printer firmware."
+  check_installed "${printer}"
+  show_success "Printing applications installed."
+
+  sudo systemctl enable --now cups
+}
+
+function install_games {
+  local games="${DIR}/packages/games.list"
+  show_header "Installing game emulators."
+  check_installed "${games}"
+  show_success "Emulators installed."
+}
+
+function install_kvm {
+  local kvm="${DIR}/packages/kvm.list"
+  # local qemuconf="/etc/libvirt/qemu.conf"
+  local libvirtlocaldir="${HOME}/.local/libvirt"
+  local nsconf="/etc/nsswitch.conf"
+  local libvirtnetworkconf="/etc/libvirt/network.conf"
+
+  show_header "Installing KVM virtualization packages."
+  check_installed "${kvm}"
+  show_success "KVM installed."
+
+  show_info "Adding $(whoami) to libvirt group."
+  sudo usermod -aG libvirt "$(whoami)"
+
+  show_info "Creating local libvirt directories."
+  mkdir -p "${libvirtlocaldir}"/{images,share}
+  sudo chown "${USER}":libvirt-qemu "${libvirtlocaldir}/images"
+
+  if [ -f "${nsconf}" ] && ! grep -q "^hosts: .*libvirt" "${nsconf}"; then
+    show_info "Enabling access to VMs on un-isolated bridge network."
+    sudo sed -i "/^hosts/{s/files/files libvirt libvirt_guest/g}" "${nsconf}"
+  fi
+
+  show_info "Setting libvirt to use iptables (for UFW compatibility)."
+  sudo sed -i 's/^#\?firewall_backend = "nftables"/firewall_backend = "iptables"/g' "${libvirtnetworkconf}"
+
+  sudo systemctl enable libvirtd
+  sudo systemctl start libvirtd
+}
+
+function install_kvm_guest {
+  local kvmguest="${DIR}/packages/kvm-guest.list"
+  local mkinitcpioconf="/etc/mkinitcpio.conf"
+  if grep -q "^flags\s*:.*hypervisor" /proc/cpuinfo; then
+    show_header "Installing tools for KVM guests."
+    check_installed "${kvmguest}"
+    show_success "KVM installed."
+
+    show_info "Adding virtio modules to initramfs."
+    local virtiomodules="virtio virtio_pci virtio_blk virtio_net virtio_ring"
+    if grep -q "^MODULES=(.*${virtiomodules}.*)$" "${mkinitcpioconf}"; then
+      show_info "Virtio modules already specified in ${mkinitcpioconf}."
+    else
+      local mkinitcpiomodules
+      mkinitcpiomodules=$(sed -n "s/^MODULES=(\(.*\))/\1 ${virtiomodules}/p" ${mkinitcpioconf} | sed -e "s/^[[:space:]]//g")
+      sudo sed -i "s/^MODULES=(.*)$/MODULES=(${mkinitcpiomodules})/" ${mkinitcpioconf}
+      show_info "Rebuilding kernel(s)"
+      sudo mkinitcpio -P
+    fi
+
+    sudo systemctl enable spice-vdagentd.service
+  else
+    show_warning "Not running on a virtualized machine. Skipping."
+  fi
+}
+
+function install_messaging {
+  local message="${DIR}/packages/message.list"
+  local weechatdir="${HOME}/.weechat"
+
+  show_header "Installing messaging applications."
+  check_installed "${message}"
+  show_success "Messaging applications installed."
+
+  show_info "Installing WeeChat plugin for Slack."
+  mkdir -p "${weechatdir}/python/autoload"
+  if [ -d "${weechatdir}/plugins/wee-slack" ]; then
+    show_info "WeeChat plugin already installed."
+  else
+    git clone https://github.com/wee-slack/wee-slack.git \
+      "${weechatdir}/plugins/wee-slack"
+    ln -sf "${weechatdir}/plugins/wee-slack/wee_slack.py" \
+      "${weechatdir}/python/autoload/"
+  fi
+  show_success "wee-slack plugin installed."
+}
+
+function install_mingw {
+  local mingw="${DIR}/packages/mingw.list"
+  show_header "Installing MinGW for cross-platform compilation."
+  check_installed "${mingw}"
+  show_success "MinGW installed."
+}
+
+function install_music {
+  local music="${DIR}/packages/music.list"
+  local beetsconf="${DIR}/configs/beets.yaml"
+  local beetsdir="${HOME}/.config/beets"
+  local mpdconf="${DIR}/configs/mpd.conf"
+  local mpddir="${HOME}/.config/mpd"
+  local ncmpcppconf="${DIR}/configs/ncmpcpp.conf"
+  local ncmpcppdir="${HOME}/.ncmpcpp"
+
+  show_header "Installing music applications."
+  check_installed "${music}"
+  show_success "Music applications installed."
+
+  show_info "Copying beets config."
+  mkdir -p "${beetsdir}"
+  cp -f "${beetsconf}" "${beetsdir}/config.yaml"
+
+  show_info "Copying mpd config and enabling systemd user service."
+  mkdir -p "${mpddir}"
+  mkdir -p "${mpddir}/playlists"
+  cp -f "${mpdconf}" "${mpddir}/mpd.conf"
+  systemctl enable --user mpd
+  systemctl start --user mpd
+
+  show_info "Copying ncmpcpp config."
+  mkdir -p "${ncmpcppdir}"
+  cp -f "${ncmpcppconf}" "${ncmpcppdir}/config"
+}
+
+function install_texlive {
+  local texlive="${DIR}/packages/texlive.list"
+
+  show_header "Installing TeX Live."
+  check_installed "${texlive}"
+  show_success "TeX Live installed."
+
+  show_info "Changing the default local texmf path to ~/.texmf"
+  local texmfconfig
+  texmfconfig=$(kpsewhich texmf.cnf)
+  mkdir -p "${HOME}/.texmf"
+  sudo sed -i "s,^TEXMFHOME = .*$,TEXMFHOME = ~/.texmf,g" "${texmfconfig}"
+  sudo sed -i "s,^TEXMFHOME = .*$,TEXMFHOME = ~/.texmf,g"  "${texmfconfig//\/usr\/share\/texmf-dist/\/etc\/texmf}"
+}
+
+function install_torbrowser {
+  local torbrowser="${DIR}/packages/torbrowser.list"
+  local torbrowser_path="${HOME}/.local/share/tor-browser"
+  local local_applications="${HOME}/.local/share/applications"
+
+  show_header "Installing Tor browser."
+  check_installed "${torbrowser}"
+
+  local response
+  local install_torbrowser=true
+  if [ -d "${torbrowser_path}" ]; then
+    show_warning "Tor browser is already installed in ${torbrowser_path@Q}."
+    response=$(ask_question "Replace? (y/N)")
+    if [[ "$response" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
+      install_torbrowser=true
+    else
+      install_torbrowser=false
+    fi
+  fi
+
+  if ${install_torbrowser}; then
+    local torbrowser_version
+    local torbrowser_package
+    local torbrowser_url="https://www.torproject.org/dist/torbrowser"
+    local arch
+    local tmpdir
+
+    show_info "Downloading Tor developers' GPG key."
+    gpg --auto-key-locate nodefault,wkd --locate-keys torbrowser@torproject.org
+
+    torbrowser_version=$(curl -Ls https://www.torproject.org/download/ |
+                         sed -n 's,^ \+<a class="downloadLink" href="/dist/torbrowser/\([0-9\.]\+\)/tor-browser-linux.*">,\1,p')
+    arch=$(uname -m)
+    if [ "${arch: -2}" -eq 86 ]; then
+      torbrowser_package="tor-browser-linux32-${torbrowser_version}_ALL.tar.xz"
+    elif [ "${arch: -2}" -eq 64 ]; then
+      torbrowser_package="tor-browser-linux64-${torbrowser_version}_ALL.tar.xz"
+    fi
+
+    show_info "Downloading release tarball."
+    tmpdir="$(mktemp -d)"
+    pushd "${tmpdir}" > /dev/null || exit
+
+    curl -L \
+      "${torbrowser_url}/${torbrowser_version}/${torbrowser_package}" \
+      -o "${torbrowser_package}"
+    curl -L \
+      "${torbrowser_url}/${torbrowser_version}/${torbrowser_package}.asc" \
+      -o "${torbrowser_package}.asc"
+
+    show_info "Verifying..."
+    gpg --verify "${torbrowser_package}"{.asc,}
+
+    show_info "Extracting..."
+    tar xf "${torbrowser_package}"
+
+    show_info "Putting things into place..."
+    mkdir -p "${local_applications}"
+    if [ -d "${torbrowser_path}" ]; then
+      show_warning "Backing up and replacing existing Tor Browser installation."
+      mv "${torbrowser_path}" "${torbrowser_path}.$(date +%Y%m%d-%k%M%S)"
+    fi
+    mv tor-browser "${torbrowser_path}"
+
+    popd > /dev/null || exit
+
+    pushd "${torbrowser_path}" > /dev/null || exit
+    ./start-tor-browser.desktop --register-app
+    popd > /dev/null || exit
+
+    rm -r "${tmpdir}"
+    show_success "Tor browser installed."
+  else
+    show_info "Skipping..."
+  fi
+}
+
+function install_vim {
+  local vim="${DIR}/packages/vim.list"
+  local vimrc="${DIR}/dotfiles/vimrc"
+  local vimspell="${HOME}/.vim/spell"
+
+  show_header "Installing Vim and Vim plugins."
+  check_installed "${vim}"
+  show_success "Vim and Vim plugins installed."
+
+  show_info "Installing vimrc."
+  cp -f "${vimrc}" "${HOME}/.vimrc"
+  show_success "vimrc installed."
+
+  show_info "Setting Vim as default tool for git diffs and merges."
+  # 00-check makes sure the git is installed, so no need for checks here.
+  git config --global diff.tool vimdiff
+  git config --global merge.tool vimdiff
+  git config --global difftool.prompt false
+
+  if command -v xdg-mime > /dev/null 2>&1; then
+    show_info "Setting Vim MIME associations."
+    xdg-mime default vim.desktop text/plain
+  fi
+
+  show_info "Install local wordlist."
+  mkdir -p "${vimspell}"
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  git clone --depth 1 \
+    https://github.com/sudorook/wordlist.vim.git "${tmpdir}"
+  pushd "${tmpdir}" > /dev/null || exit
+  ./build
+  if [ -f "${vimspell}/en.utf-8.add" ]; then
+    show_info "Wordlist already exists in ${vimspell@Q}. Appending."
+    ./append
+  else
+    ./install
+  fi
+  popd > /dev/null || exit
+  rm -rf "${tmpdir}"
+  show_success "Wordlist installed in ${vimspell@Q}."
+  show_info "To use the wordlist, add the following to you vimrc:"
+  show_info "  set spelllang=en"
+  show_info "  set spellfile=\$HOME/.vim/spell/en.utf-8.add"
+}
+
+function install_neovim {
+  local nvim="${DIR}/packages/neovim.list"
+  local nvimrc="${DIR}/dotfiles/nvimrc"
+  local nvimspell="${HOME}/.config/nvim/spell"
+
+  show_header "Installing Neovim."
+  check_installed "${nvim}"
+  show_success "Neovim installed."
+
+  mkdir -p "${HOME}/.config/nvim"
+  copy_config_file "${nvimrc}" "${HOME}/.config/nvim/init.lua"
+
+  show_info "Setting Neovim as default tool for git diffs and merges."
+  # 00-check makes sure the git is installed, so no need for checks here.
+  git config --global diff.tool nvimdiff
+  git config --global merge.tool nvimdiff
+  git config --global difftool.prompt false
+
+  if command -v xdg-mime > /dev/null 2>&1; then
+    show_info "Setting Neovim MIME associations."
+    xdg-mime default nvim.desktop text/plain
+  fi
+
+  show_info "Install local wordlist."
+  mkdir -p "${nvimspell}"
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  git clone --depth 1 \
+    https://github.com/sudorook/wordlist.vim.git "${tmpdir}"
+  pushd "${tmpdir}" > /dev/null || exit
+  ./build
+  if [ -f "${nvimspell}/en.utf-8.add" ]; then
+    show_info "Wordlist already exists in ${nvimspell@Q}. Appending."
+    ./append
+  else
+    ./install
+  fi
+  popd > /dev/null || exit
+  rm -rf "${tmpdir}"
+  show_success "Wordlist installed in ${nvimspell@Q}."
+}
+
+function install_lazyvim {
+  if [ $EUID -ne 0 ]; then
+    local lazyvim="${DIR}/packages/lazyvim.list"
+    local lazygit="${DIR}/configs/lazygit.yml"
+    local nvimspell="${HOME}/.config/nvim/spell"
+    local rubocop="${DIR}/configs/rubocop.yml"
+
+    show_info "Installing LazyVim dependencies."
+    check_installed "${lazyvim}"
+    show_success "LazyVim dependencies installed."
+
+    copy_config_file "${lazygit}" "${HOME}/.config/lazygit/config.yml"
+
+    copy_config_file "${rubocop}" "${HOME}/.config/rubocop/config.yml"
+
+    show_info "Installing LazyVim configuration files for Neovim."
+    if [ -d "${HOME}/.config/nvim" ]; then
+      if [ -d "${HOME}/.config/nvim/.git" ] &&
+        git -C "${HOME}/.config/nvim" remote show origin -n |
+          grep -q "sudorook/lazyvim.nvim"; then
+          show_info "LazyVim config already installed."
+          git -C "${HOME}/.config/nvim" pull
+          show_success "Existing LazyVim updated."
+      else
+        show_info "Backing up existing Neovim config directory."
+        mv -v "${HOME}/.config/nvim" "${HOME}/.config/nvim_$(date +%Y%m%d-%k%M%S)"
+        git clone https://github.com/sudorook/lazyvim.nvim.git "${HOME}/.config/nvim"
+        show_success "LazyVim installed."
+      fi
+    else
+      git clone https://github.com/sudorook/lazyvim.nvim.git "${HOME}/.config/nvim"
+      show_success "LazyVim installed."
+    fi
+
+    show_info "Install local wordlist."
+    mkdir -p "${nvimspell}"
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+    git clone --depth 1 \
+      https://github.com/sudorook/wordlist.vim.git "${tmpdir}"
+    pushd "${tmpdir}" > /dev/null || exit
+    ./build
+    if [ -f "${nvimspell}/en.utf-8.add" ]; then
+      show_info "Wordlist already exists in ${nvimspell@Q}. Appending."
+      ./append
+    else
+      ./install
+    fi
+    popd > /dev/null || exit
+    rm -rf "${tmpdir}"
+    show_success "Wordlist installed in ${nvimspell@Q}."
+  else
+    show_warning "Don't do this as root. Skipping..."
+  fi
+}
+
+function install_virtualbox {
+  local virtualbox="${DIR}/packages/virtualbox.list"
+
+  show_header "Installing VirtualBox."
+  check_installed "${virtualbox}"
+  show_success "VirtualBox installed."
+
+  if getent group vboxusers; then
+    show_info "Adding $(whoami) to vboxusers group."
+    sudo usermod -aG vboxusers "$(whoami)"
+  fi
+}
+
+function install_virtualbox_guest {
+  local virtualboxguest="${DIR}/packages/virtualbox-guest.list"
+  if grep -q "^flags.*\ hypervisor" /proc/cpuinfo; then
+    show_header "Installing packages for VirtualBox guests."
+    check_installed "${virtualboxguest}"
+    show_success "VirtualBox guest packages installed."
+  else
+    show_warning "Not running on a virtualized machine. Skipping."
+  fi
+}
+
+function install_wine {
+  local wine="${DIR}/packages/wine.list"
+  show_header "Installing wine."
+  if [[ $(uname -m) = "x86_64" ]] &&
+    ! grep -q "^\[multilib\]" /etc/pacman.conf; then
+    show_info "multilib repos need to be enabled for 64-bit architectures."
+    enable_multilib
+  fi
+  check_installed "${wine}"
+  show_success "Wine installed."
+}
+
+function 03-packages {
+  show_question "Applications: what do you want to install?"
+  show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+
+  local options=(
+    "Back"
+    "All"
+    "3D acceleration"
+    "Android tools"
+    "General applications"
+    "General applications (AUR)"
+    "General KDE applications"
+    "General KDE applications (AUR)"
+    "Codecs"
+    "Containers"
+    "Development"
+    "Development (AUR)"
+    "Extra applications"
+    "Extra KDE applications"
+    "Emulators"
+    "KVM (host)"
+    "KVM (guest)"
+    "Messaging"
+    "MinGW"
+    "Music"
+    "Printing"
+    "PipeWire"
+    "TeX Live"
+    "Tor browser"
+    "Vim"
+    "Neovim"
+    "LazyVim (Neovim)"
+    "VirtualBox (host)"
+    "VirtualBox (guest)"
+    "Wine")
+  local option
+  select option in "${options[@]}"; do
+    case "${option}" in
+      "Back")
+        break
+        ;;
+      "All")
+        install_3d_accel
+        install_android
+        install_apps
+        install_apps_kde
+        install_apps_aur
+        install_apps_kde_aur
+        install_codecs
+        install_containers
+        install_dev
+        install_dev_aur
+        install_extra
+        install_extra_kde
+        install_pipewire
+        install_printing
+        install_games
+        install_kvm
+        install_kvm_guest
+        install_messaging
+        install_mingw
+        install_music
+        install_texlive
+        install_torbrowser
+        install_vim
+        install_neovim
+        install_lazyvim
+        install_virtualbox
+        install_virtualbox_guest
+        install_wine
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "3D acceleration")
+        install_3d_accel
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "Android tools")
+        install_android
+        show_info "Main\n ${ENDBRANCH} Misc (Hit ENTER to see options again.)"
+        ;;
+      "General applications")
+        install_apps
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "General applications (AUR)")
+        install_apps_aur
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "General KDE applications")
+        install_apps_kde
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "General KDE applications (AUR)")
+        install_apps_kde_aur
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Codecs")
+        install_codecs
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Containers")
+        install_containers
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Development")
+        install_dev
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Development (AUR)")
+        install_dev_aur
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Extra applications")
+        install_extra
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Extra KDE applications")
+        install_extra_kde
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Emulators")
+        install_games
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "KVM (host)")
+        install_kvm
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "KVM (guest)")
+        install_kvm_guest
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Messaging")
+        install_messaging
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "MinGW")
+        install_mingw
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Music")
+        install_music
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "PipeWire")
+        install_pipewire
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Printing")
+        install_printing
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "TeX Live")
+        install_texlive
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Tor browser")
+        install_torbrowser
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Vim")
+        install_vim
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Neovim")
+        install_neovim
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "LazyVim (Neovim)")
+        install_lazyvim
+        show_info "Main\n ${ENDBRANCH} Personal (Hit ENTER to see options again.)"
+        ;;
+      "VirtualBox (host)")
+        install_virtualbox
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "VirtualBox (guest)")
+        install_virtualbox_guest
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      "Wine")
+        install_wine
+        show_info "Main\n ${ENDBRANCH} Apps (Hit ENTER to see options again.)"
+        ;;
+      *)
+        show_warning "Invalid option."
+        ;;
+    esac
+  done
+}
