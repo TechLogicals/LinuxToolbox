@@ -1,0 +1,12 @@
+[2024-10-04 17:17:19] Program started
+[2024-10-04 17:17:20] Error checking for updates: Failed to parse latest version 'v0.05': invalid leading zero in minor version number
+[2024-10-04 17:17:31] Error running script: "scripts/postinstall2.sh" - Script not found: "scripts/postinstall2.sh"
+[2024-10-04 17:17:37] Program exited
+[2024-10-04 17:18:31] Program started
+[2024-10-04 17:18:32] Error checking for updates: Failed to parse latest version 'v0.05': invalid leading zero in minor version number
+[2024-10-04 17:18:37] Error running script: "scripts/postinstall2.sh" - Script is not executable: "scripts/postinstall2.sh"
+[2024-10-04 17:18:42] Program exited
+[2024-10-04 17:19:13] Program started
+[2024-10-04 17:19:14] Error checking for updates: Failed to parse latest version 'v0.05': invalid leading zero in minor version number
+[2024-10-04 17:20:36] Script executed: "scripts/postinstall2.sh"
+[2024-10-04 18:01:21] Program exited
