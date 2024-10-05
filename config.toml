@@ -1,20 +1,24 @@
 [Arch-Install-scripts]
 ArchInstall = "scripts/archinstall.sh"
 Arch-Postinstall-Goodies = "scripts/postinstall2.sh"
+Enable-ssh-server = "scripts/arch-openssh.sh"
+Install-Virt-Manager = "scripts/arch-installvirt.sh"
 
 [Debian-Specfic-Scripts]
 DebianInstall = "scripts/debianinstall.sh"
+Restreamer = "scripts/deb-restreamer-install.sh"
 
 [Seedbox-Scripts]
 Seedbox-All = "scripts/seedboxall.sh"
-Docker-Seedbox = "scripts/dockerseedbox.sh"
+Docker-Seedbox = "scripts/docker-media.sh"
 
 [Development]
 Git = "scripts/git.sh"
+Build-Utils = "scripts/build-utils.sh"
 
 [AI]
 AI-Dependancies = "scripts/aidependancies.sh"
-Ollama = "scripts/ollama.sh"
+Ollama = "scripts/ollamasetup.sh"
 Flux = "scripts/flux.sh"
 
 [Multimedia]
@@ -26,6 +30,8 @@ Audacity = "audacity.sh"
 htop = "htop.sh"
 neofetch = "neofetch.sh"
 tmux = "tmux.sh"
+bash-prompt = "scripts/bashprompt.sh"
+general-utils = "scripts/utils.sh"
 
 [Communication]
 Discord = "discord.sh"

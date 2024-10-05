@@ -4,7 +4,6 @@ name = "menu"
 version = "0.1.0"
 edition = "2021"
 
-
 [dependencies]
 ratatui = "0.20.0"
 crossterm = "0.25"
