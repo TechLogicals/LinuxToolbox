@@ -12,4 +12,4 @@
 <a href="https://www.youtube.com/@techlogicals" target="blank"><img align="center" src="https://raw.githubusercontent.com/rahuldkjain/github-profile-readme-generator/master/src/images/icons/Social/youtube.svg" alt="techlogicals" height="30" width="40" /></a>
 </p>
 to run ;
-curl -fsSL https://toolbox.techlogicals.uk/linuxtoolbox.sh | sh
+curl -fsSL https://toolbox.techlogicals.uk/installtoolbox.sh | sh
