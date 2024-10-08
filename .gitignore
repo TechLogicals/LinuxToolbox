@@ -1,0 +1,23 @@
+# Ignore build and target directories
+release/
+target/
+
+# Ignore any compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Ignore Rust-specific files
+Cargo.lock
+**/*.rs.bk
+
+# Ignore editor-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
