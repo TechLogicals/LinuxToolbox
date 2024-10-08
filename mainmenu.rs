@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use chrono::Local;
 use sysinfo::{System, SystemExt, CpuExt};
 
-const CURRENT_VERSION: &str = "0.5.5";
+const CURRENT_VERSION: &str = "0.6.0";
 const GITHUB_REPO: &str = "TechLogicals/LinuxToolbox";
 const COLOR_SCHEME_FILE: &str = "color_scheme.json";
 const LOG_FILE: &str = "linuxtoolbox.log";
@@ -492,17 +492,19 @@ fn draw_ui<B: Backend>(
         .split(size);
 
     // Title
+    let current_date = Local::now().format("%Y-%m-%d").to_string();
     let mut title_text = vec![
         Span::styled("Linux Toolbox ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(format!("v{}", CURRENT_VERSION), Style::default().fg(Color::Yellow)),
         Span::raw(" by "),
         Span::styled("Tech Logicals", Style::default().fg(Color::Green).add_modifier(Modifier::ITALIC)),
+        Span::raw(" | "),
+        Span::styled(current_date, Style::default().fg(Color::Magenta)),
     ];
 
     if let Some(new_version) = update_available {
-        title_text.push(Span::raw(" ("));
+        title_text.push(Span::raw(" | "));
         title_text.push(Span::styled(format!("Update v{} available", new_version), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)));
-        title_text.push(Span::raw(")"));
     }
 
     let title = Paragraph::new(Spans::from(title_text))

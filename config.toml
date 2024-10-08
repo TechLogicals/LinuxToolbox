@@ -12,6 +12,14 @@ Restreamer = "scripts/deb-restreamer-install.sh"
 Seedbox-All = "scripts/seedboxall.sh"
 Docker-Seedbox = "scripts/docker-media.sh"
 
+[Desktop-Environment]
+Hyprland = "scripts/hyprlandinstall.sh" #Needs to be tested
+Cosmic = "scripts/installcosmic.sh" #Needs to be tested
+Gnome = "scripts/gnomeinstall.sh" #Needs to be tested
+Budgie = "scripts/budgieinstall.sh" #Needs to be tested
+Cinnamon = "scripts/cinnamoninstall.sh" #Needs to be tested
+KDE = "scripts/kdeinstall.sh" #Needs to be tested
+
 [Development]
 Git = "scripts/git.sh"
 Build-Utils = "scripts/build-utils.sh"
@@ -19,7 +27,7 @@ Build-Utils = "scripts/build-utils.sh"
 [AI]
 AI-Dependancies = "scripts/aidependancies.sh"
 Ollama = "scripts/ollamasetup.sh"
-Flux = "scripts/flux.sh"
+Flux = "scripts/fluxinstall.sh"
 
 [Multimedia]
 VLC = "vlc.sh"
