@@ -18,3 +18,22 @@
 [2024-10-05 13:24:41] Program started
 [2024-10-05 13:27:21] Program started
 [2024-10-05 13:28:25] Program exited
+[2024-10-23 17:30:34] Program started
+[2024-10-23 17:30:35] Error checking for updates: Failed to parse latest version 'v0.6': unexpected end of input while parsing minor version number
+[2024-10-23 17:31:35] Script executed: "scripts/postinstall2.sh"
+[2024-10-23 17:32:22] Program exited
+[2024-10-23 17:34:25] Program started
+[2024-10-23 17:34:26] Error checking for updates: Failed to parse latest version 'v0.6': unexpected end of input while parsing minor version number
+[2024-10-23 17:34:33] Program exited
+[2024-10-23 17:51:12] Program started
+[2024-10-23 17:51:13] Error checking for updates: Failed to parse latest version 'v0.6': unexpected end of input while parsing minor version number
+[2024-10-23 17:55:24] Script executed: "scripts/build-utils.sh"
+[2024-10-23 17:55:28] Program exited
+[2024-10-23 17:58:38] Program started
+[2024-10-23 17:58:39] Error checking for updates: Failed to parse latest version 'v0.6': unexpected end of input while parsing minor version number
+[2024-10-23 17:59:46] Program started
+[2024-10-23 17:59:47] Error checking for updates: Failed to parse latest version 'v0.6': unexpected end of input while parsing minor version number
+[2024-10-23 18:00:04] Program exited
+[2024-10-23 18:03:50] Program started
+[2024-10-23 18:03:51] Error checking for updates: Failed to parse latest version 'v0.6': unexpected end of input while parsing minor version number
+[2024-10-23 18:04:01] Program exited

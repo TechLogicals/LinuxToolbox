@@ -1,0 +1,103 @@
+#!/bin/bash
+
+set -euo pipefail
+
+DIR="$(dirname "$0")"
+
+#
+# Source the functions
+#
+
+. "${DIR}"/functions/00-check
+. "${DIR}"/functions/00-install
+
+#
+# Define main select wrapper
+#
+
+function main {
+  ask_device
+  ask_partition_scheme
+  case "${SCHEME}" in
+    "LVM on LUKS")
+      ask_physical_volume_name
+      ask_volume_group_name
+      ;;
+    "LVM")
+      SCHEME="LVM"
+      ask_volume_group_name
+      ;;
+    *) ;;
+  esac
+  ask_bootmode
+  ask_partition_sizes
+
+  ask_timezone
+  ask_locale
+  ask_hostname
+  ask_username
+  ask_password
+  if [[ "${SCHEME}" = "LVM on LUKS" ]]; then
+    ask_lukspass
+  fi
+
+  set_partitions
+  format_partitions
+
+  mount_install
+  pacstrap /mnt base
+  genfstab -U /mnt >> /mnt/etc/fstab
+  if [[ "${BOOTMODE}" = "systemd-boot" ]]; then
+    sed -i "/\(.*\)\s\+\/efi\s\+vfat/s/0022/0077/g" /mnt/etc/fstab
+  fi
+  TIMEZONE="${TIMEZONE}" arch-chroot /mnt /bin/bash -c "set_timezone"
+  LOCALE="${LOCALE}" CHARSET="${CHARSET}" \
+    arch-chroot /mnt /bin/bash -c "set_locale"
+
+  arch-chroot /mnt /bin/bash -c "update_mirrorlist"
+  arch-chroot /mnt /bin/bash -c "install_packages"
+  arch-chroot /mnt /bin/bash -c "install_ucode"
+  HOST_NAME="${HOST_NAME}" arch-chroot /mnt /bin/bash -c "set_hostname"
+  USER_NAME="${USER_NAME}" USER_PASSWORD="${USER_PASSWORD}" arch-chroot /mnt /bin/bash -c "add_user"
+  arch-chroot /mnt /bin/bash -c "disable_root"
+  arch-chroot /mnt /bin/bash -c "set_mkinitcpio"
+  if [[ "${BOOTMODE}" = "GRUB" ]]; then
+    SCHEME="${SCHEME}" DEVICE="${DEVICE}" \
+      arch-chroot /mnt /bin/bash -c "install_grub"
+    if [[ "${SCHEME}" = "LVM on LUKS" ]]; then
+      CRYPT_PASSWORD="${CRYPT_PASSWORD}" CRYPT_PARTITION="${CRYPT_PARTITION}" \
+        arch-chroot /mnt /bin/bash -c "make_luks_key"
+    fi
+  elif [[ "${BOOTMODE}" = "systemd-boot" ]]; then
+    cp -f \
+      "${DIR}/hooks/efi-update@.path" \
+      "${DIR}/hooks/efi-update@.service" \
+      /mnt/etc/systemd/system/
+    cp -f "${DIR}/utils/sdboot-mkconfig" /mnt/usr/local/sbin/
+    chmod +x /mnt/usr/local/sbin/sdboot-mkconfig
+
+    SCHEME="${SCHEME}" DEVICE="${DEVICE}" \
+      arch-chroot /mnt /bin/bash -c "install_gummiboot"
+  elif [[ "${BOOTMODE}" = "EFISTUB" ]]; then
+    SCHEME="${SCHEME}" DEVICE="${DEVICE}" ROOT_PARTITION="${ROOT_PARTITION}" CRYPT_PARTITION="${CRYPT_PARTITION}" \
+      arch-chroot /mnt /bin/bash -c "install_efistub"
+  fi
+  unmount_install
+  show_success "Done! Reboot now."
+}
+
+#
+# Check if dependencies are installed and if network is working
+#
+
+check_root
+check_network
+if ! check_install_commands; then
+  check_sync_repos
+  install_dependencies
+fi
+
+
+#
+
+main

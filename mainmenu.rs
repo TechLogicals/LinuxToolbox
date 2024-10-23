@@ -10,7 +10,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Clear, Wrap},
     layout::{Layout, Constraint, Direction, Alignment, Rect},
     style::{Color, Modifier, Style},
-    text::{Span, Spans},
+    text::{Span, Line},
     Terminal, Frame,
 };
 use crossterm::{
@@ -25,11 +25,24 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use chrono::Local;
 use sysinfo::{System, SystemExt, CpuExt};
+use rand::seq::SliceRandom;
 
-const CURRENT_VERSION: &str = "0.6.0";
+const CURRENT_VERSION: &str = "0.6.5";
 const GITHUB_REPO: &str = "TechLogicals/LinuxToolbox";
 const COLOR_SCHEME_FILE: &str = "color_scheme.json";
 const LOG_FILE: &str = "linuxtoolbox.log";
+const LINUX_QUOTES: &[&str] = &[
+    "Talk is cheap. Show me the code. - Linus Torvalds",
+    "Given enough eyeballs, all bugs are shallow. - Eric S. Raymond",
+    "Software is like sex: it's better when it's free. - Linus Torvalds",
+    "The Linux philosophy is 'Laugh in the face of danger'. Oops. Wrong One. 'Do it yourself'. Yes, that's it. - Linus Torvalds",
+    "Intelligence is the ability to avoid doing work, yet getting the work done. - Linus Torvalds",
+    "A computer is like air conditioning – it becomes useless when you open Windows. - Linus Torvalds",
+    "Microsoft isn't evil, they just make really crappy operating systems. - Linus Torvalds",
+    "If you think your users are idiots, only idiots will use it. - Linus Torvalds",
+    "I'm doing a (free) operating system (just a hobby, won't be big and professional like gnu) - Linus Torvalds",
+    "The most important thing in Open Source is that people are having fun and feeling like they're part of a community. - Mark Shuttleworth",
+];
 
 #[derive(Clone)]
 struct Category {
@@ -134,6 +147,7 @@ struct AppState {
     loading: bool,
     loading_progress: u8,
     system_info: String,
+    current_quote: String,
 }
 
 enum InputAction {
@@ -261,24 +275,24 @@ fn run_script(script: &PathBuf) -> std::io::Result<()> {
 }
 
 fn draw_help_screen<B: Backend>(f: &mut Frame<B>, color_scheme: &ColorScheme) {
-    let (bg_color, fg_color, highlight_color) = color_scheme.get_colors();
+    let (bg_color, fg_color, _highlight_color) = color_scheme.get_colors();
     let help_text = vec![
-        Spans::from("Linux Toolbox Help"),
-        Spans::from(""),
-        Spans::from("Navigation:"),
-        Spans::from("↑↓: Move selection"),
-        Spans::from("Enter: Select/Run program"),
-        Spans::from("Esc/Backspace: Go back"),
-        Spans::from(""),
-        Spans::from("Shortcuts:"),
-        Spans::from("/: Search"),
-        Spans::from("Tab: Change color scheme"),
-        Spans::from("h: Toggle help screen"),
-        Spans::from("q: Quit"),
-        Spans::from("1-9: Quick select category"),
-        Spans::from("Home: Back to top"),
-        Spans::from("f: Toggle favorite"),
-        Spans::from("i: View system information"),
+        Line::from("Linux Toolbox Help"),
+        Line::from(""),
+        Line::from("Navigation:"),
+        Line::from("↑↓: Move selection"),
+        Line::from("Enter: Select/Run program"),
+        Line::from("Esc/Backspace: Go back"),
+        Line::from(""),
+        Line::from("Shortcuts:"),
+        Line::from("/: Search"),
+        Line::from("Tab: Change color scheme"),
+        Line::from("h: Toggle help screen"),
+        Line::from("q: Quit"),
+        Line::from("1-9: Quick select category"),
+        Line::from("Home: Back to top"),
+        Line::from("f: Toggle favorite"),
+        Line::from("i: View system information"),
     ];
 
     let help_paragraph = Paragraph::new(help_text)
@@ -300,67 +314,73 @@ fn handle_input<'a>(
     program_state: &mut ListState,
     color_scheme: &mut ColorScheme,
     app_state: &mut AppState,
-) -> InputAction {
+) -> (InputAction, bool) {
+    let mut menu_state_changed = false;
+    
     match key.code {
         KeyCode::Tab => {
             *color_scheme = color_scheme.next();
             if let Err(e) = save_color_scheme(color_scheme) {
                 eprintln!("Failed to save color scheme: {}", e);
             }
-            InputAction::Continue
+            (InputAction::Continue, menu_state_changed)
         },
         KeyCode::Char('q') => {
             app_state.status_message = Some("Press 'y' to confirm quit, any other key to cancel".to_string());
-            InputAction::ConfirmQuit
+            (InputAction::ConfirmQuit, menu_state_changed)
         },
         KeyCode::Char('y') if app_state.status_message == Some("Press 'y' to confirm quit, any other key to cancel".to_string()) => {
-            InputAction::Quit
+            (InputAction::Quit, menu_state_changed)
         },
         KeyCode::Char('h') => {
-            *menu_state = if *menu_state == MenuState::Help { MenuState::Categories } else { MenuState::Help };
-            InputAction::Continue
+            let new_state = if *menu_state == MenuState::Help { MenuState::Categories } else { MenuState::Help };
+            menu_state_changed = *menu_state != new_state;
+            *menu_state = new_state;
+            (InputAction::Continue, menu_state_changed)
         },
         KeyCode::Char('f') if *menu_state == MenuState::Programs => {
             let program = &mut categories[*selected_category].programs[*selected_program];
             program.is_favorite = !program.is_favorite;
             app_state.status_message = Some(format!("{} {} favorites", if program.is_favorite { "Added to" } else { "Removed from" }, program.name));
-            InputAction::Continue
+            (InputAction::Continue, menu_state_changed)
         },
         KeyCode::Char('i') => {
-            *menu_state = if *menu_state == MenuState::SystemInfo { MenuState::Categories } else { MenuState::SystemInfo };
-            InputAction::Continue
+            let new_state = if *menu_state == MenuState::SystemInfo { MenuState::Categories } else { MenuState::SystemInfo };
+            menu_state_changed = *menu_state != new_state;
+            *menu_state = new_state;
+            (InputAction::Continue, menu_state_changed)
         },
         _ => match menu_state {
             MenuState::Categories => match key.code {
                 KeyCode::Char('/') => {
                     *menu_state = MenuState::Search;
                     search_query.clear();
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
                 KeyCode::Up => {
                     if *selected_category > 0 {
                         *selected_category -= 1;
                         category_state.select(Some(*selected_category));
                     }
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
                 KeyCode::Down => {
                     if *selected_category < categories.len() - 1 {
                         *selected_category += 1;
                         category_state.select(Some(*selected_category));
                     }
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
                 KeyCode::Enter => {
                     *menu_state = MenuState::Programs;
                     *selected_program = 0;
                     program_state.select(Some(0));
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
                 KeyCode::Home => {
                     *selected_category = 0;
                     category_state.select(Some(0));
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
                 KeyCode::Char(c) if c.is_digit(10) => {
                     let index = c.to_digit(10).unwrap() as usize;
@@ -368,82 +388,82 @@ fn handle_input<'a>(
                         *selected_category = index - 1;
                         category_state.select(Some(*selected_category));
                     }
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
-                _ => InputAction::Continue,
+                _ => (InputAction::Continue, menu_state_changed),
             },
             MenuState::Programs => match key.code {
                 KeyCode::Char('/') => {
                     *menu_state = MenuState::Search;
                     search_query.clear();
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
                 KeyCode::Up => {
                     if *selected_program > 0 {
                         *selected_program -= 1;
                         program_state.select(Some(*selected_program));
                     }
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
                 KeyCode::Down => {
                     if *selected_program < categories[*selected_category].programs.len() - 1 {
                         *selected_program += 1;
                         program_state.select(Some(*selected_program));
                     }
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
-                KeyCode::Enter => InputAction::RunScript,
+                KeyCode::Enter => (InputAction::RunScript, menu_state_changed),
                 KeyCode::Esc | KeyCode::Backspace => {
                     *menu_state = MenuState::Categories;
                     *selected_program = 0;
                     program_state.select(Some(0));
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
                 KeyCode::Home => {
                     *selected_program = 0;
                     program_state.select(Some(0));
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
-                _ => InputAction::Continue,
+                _ => (InputAction::Continue, menu_state_changed),
             },
             MenuState::Search => match key.code {
                 KeyCode::Enter => {
                     if !filtered_programs.is_empty() {
-                        InputAction::RunScript
+                        (InputAction::RunScript, menu_state_changed)
                     } else {
-                        InputAction::Continue
+                        (InputAction::Continue, menu_state_changed)
                     }
                 },
                 KeyCode::Esc => {
                     *menu_state = MenuState::Categories;
                     search_query.clear();
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
                 KeyCode::Char(c) => {
                     search_query.push(c);
                     update_filtered_programs(categories, search_query, filtered_programs);
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
                 KeyCode::Backspace => {
                     search_query.pop();
                     update_filtered_programs(categories, search_query, filtered_programs);
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
-                _ => InputAction::Continue,
+                _ => (InputAction::Continue, menu_state_changed),
             },
             MenuState::Help => match key.code {
                 KeyCode::Esc | KeyCode::Char('h') => {
                     *menu_state = MenuState::Categories;
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
-                _ => InputAction::Continue,
+                _ => (InputAction::Continue, menu_state_changed),
             },
             MenuState::SystemInfo => match key.code {
                 KeyCode::Esc | KeyCode::Char('i') => {
                     *menu_state = MenuState::Categories;
-                    InputAction::Continue
+                    (InputAction::Continue, menu_state_changed)
                 }
-                _ => InputAction::Continue,
+                _ => (InputAction::Continue, menu_state_changed),
             },
         },
     }
@@ -487,27 +507,32 @@ fn draw_ui<B: Backend>(
             Constraint::Length(3),  // Search bar
             Constraint::Min(10),    // Main content (categories and programs)
             Constraint::Length(3),  // OS info
-            Constraint::Length(3),  // Help text (increased from 1 to 3)
+            Constraint::Length(3),  // Help text
+            Constraint::Length(3),  // Quote (new)
         ].as_ref())
         .split(size);
 
     // Title
     let current_date = Local::now().format("%Y-%m-%d").to_string();
     let mut title_text = vec![
-        Span::styled("Linux Toolbox ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("v{}", CURRENT_VERSION), Style::default().fg(Color::Yellow)),
-        Span::raw(" by "),
-        Span::styled("Tech Logicals", Style::default().fg(Color::Green).add_modifier(Modifier::ITALIC)),
-        Span::raw(" | "),
-        Span::styled(current_date, Style::default().fg(Color::Magenta)),
+        Line::from(vec![
+            Span::styled("Linux Toolbox ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("v{}", CURRENT_VERSION), Style::default().fg(Color::Yellow)),
+            Span::raw(" by "),
+            Span::styled("Tech Logicals", Style::default().fg(Color::Green).add_modifier(Modifier::ITALIC)),
+            Span::raw(" | "),
+            Span::styled(current_date, Style::default().fg(Color::Magenta)),
+        ]),
     ];
 
     if let Some(new_version) = update_available {
-        title_text.push(Span::raw(" | "));
-        title_text.push(Span::styled(format!("Update v{} available", new_version), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)));
+        title_text.push(Line::from(vec![
+            Span::raw(" | "),
+            Span::styled(format!("Update v{} available", new_version), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        ]));
     }
 
-    let title = Paragraph::new(Spans::from(title_text))
+    let title = Paragraph::new(title_text)
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(fg_color).bg(bg_color)));
     f.render_widget(title, chunks[0]);
@@ -531,7 +556,7 @@ fn draw_ui<B: Backend>(
     let category_items: Vec<ListItem> = categories
         .iter()
         .map(|c| {
-            ListItem::new(Spans::from(vec![
+            ListItem::new(Line::from(vec![
                 Span::styled("• ", Style::default().fg(Color::Cyan)),
                 Span::raw(c.name.clone()),
             ]))
@@ -548,14 +573,14 @@ fn draw_ui<B: Backend>(
     // Programs list
     let program_items: Vec<ListItem> = if *menu_state == MenuState::Search {
         filtered_programs.iter().map(|(_, p, _)| {
-            ListItem::new(Spans::from(vec![
+            ListItem::new(Line::from(vec![
                 Span::styled("▶ ", Style::default().fg(Color::Cyan)),
                 Span::raw(p.clone()),
             ]))
         }).collect()
     } else {
         categories[selected_category].programs.iter().map(|p| {
-            ListItem::new(Spans::from(vec![
+            ListItem::new(Line::from(vec![
                 Span::styled(if p.is_favorite { "★ " } else { "▶ " }, Style::default().fg(Color::Cyan)),
                 Span::raw(p.name.clone()),
             ]))
@@ -590,6 +615,13 @@ fn draw_ui<B: Backend>(
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(fg_color).bg(bg_color)));
     f.render_widget(help_paragraph, chunks[4]);
+
+    // Quote
+    let quote = Paragraph::new(app_state.current_quote.as_str())
+        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::ITALIC))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(fg_color).bg(bg_color)));
+    f.render_widget(quote, chunks[5]);
 
     // Status message
     if let Some(message) = &app_state.status_message {
@@ -698,30 +730,30 @@ fn get_system_info() -> String {
 fn draw_system_info_screen<B: Backend>(f: &mut Frame<B>, color_scheme: &ColorScheme, system_info: &str) {
     let (bg_color, fg_color, _highlight_color) = color_scheme.get_colors();
     
-    let system_info_lines: Vec<Spans> = system_info
+    let system_info_lines: Vec<Line> = system_info
         .lines()
         .map(|line| {
             let parts: Vec<&str> = line.splitn(2, ": ").collect();
             if parts.len() == 2 {
-                Spans::from(vec![
+                Line::from(vec![
                     Span::styled(format!("{}: ", parts[0]), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
                     Span::raw(parts[1]),
                 ])
             } else {
-                Spans::from(line)
+                Line::from(line)
             }
         })
         .collect();
 
     let mut text = vec![
-        Spans::from(vec![
+        Line::from(vec![
             Span::styled("System Information", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         ]),
-        Spans::from(""),
+        Line::from(""),
     ];
     text.extend(system_info_lines);
-    text.push(Spans::from(""));
-    text.push(Spans::from(vec![
+    text.push(Line::from(""));
+    text.push(Line::from(vec![
         Span::raw("Press "),
         Span::styled("'i'", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw(" or "),
@@ -738,6 +770,10 @@ fn draw_system_info_screen<B: Backend>(f: &mut Frame<B>, color_scheme: &ColorSch
     let area = centered_rect(60, 40, f.size());
     f.render_widget(Clear, area);
     f.render_widget(system_info_paragraph, area);
+}
+
+fn get_random_quote() -> &'static str {
+    LINUX_QUOTES.choose(&mut rand::thread_rng()).unwrap_or(&"No quote available")
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -763,6 +799,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         loading: true,
         loading_progress: 0,
         system_info: get_system_info(),
+        current_quote: get_random_quote().to_string(),
     };
 
     // Simulate loading
@@ -812,7 +849,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
         if let Event::Key(key) = event::read()? {
-            let action = handle_input(
+            let (action, menu_state_changed) = handle_input(
                 key,
                 &mut menu_state,
                 &mut selected_category,
@@ -876,6 +913,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 InputAction::Continue => {
                     if app_state.status_message == Some("Press 'y' to confirm quit, any other key to cancel".to_string()) {
                         app_state.status_message = Some("Quit cancelled".to_string());
+                    }
+                    // Refresh the quote when the menu state changes
+                    if menu_state_changed {
+                        app_state.current_quote = get_random_quote().to_string();
                     }
                 }
             }
