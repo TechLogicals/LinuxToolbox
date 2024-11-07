@@ -14,7 +14,7 @@ use ratatui::{
     Terminal, Frame,
 };
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, Event, KeyCode, KeyEvent, MouseEvent, MouseEventKind, EnableMouseCapture, DisableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     cursor::{MoveTo, Show, Hide},
@@ -27,7 +27,7 @@ use chrono::Local;
 use sysinfo::{System, SystemExt, CpuExt};
 use rand::seq::SliceRandom;
 
-const CURRENT_VERSION: &str = "0.6.5";
+const CURRENT_VERSION: &str = "0.6.7";
 const GITHUB_REPO: &str = "TechLogicals/LinuxToolbox";
 const COLOR_SCHEME_FILE: &str = "color_scheme.json";
 const LOG_FILE: &str = "linuxtoolbox.log";
@@ -88,6 +88,16 @@ enum ColorScheme {
     Candy,
     Earth,
     Midnight,
+    Matrix,
+    Nordic,
+    Dracula,
+    Solarized,
+    Monokai,
+    Gruvbox,
+    Tokyo,
+    Synthwave,
+    Coffee,
+    Nature,
 }
 
 impl ColorScheme {
@@ -112,7 +122,17 @@ impl ColorScheme {
             ColorScheme::Space => ColorScheme::Candy,
             ColorScheme::Candy => ColorScheme::Earth,
             ColorScheme::Earth => ColorScheme::Midnight,
-            ColorScheme::Midnight => ColorScheme::Default,
+            ColorScheme::Midnight => ColorScheme::Matrix,
+            ColorScheme::Matrix => ColorScheme::Nordic,
+            ColorScheme::Nordic => ColorScheme::Dracula,
+            ColorScheme::Dracula => ColorScheme::Solarized,
+            ColorScheme::Solarized => ColorScheme::Monokai,
+            ColorScheme::Monokai => ColorScheme::Gruvbox,
+            ColorScheme::Gruvbox => ColorScheme::Tokyo,
+            ColorScheme::Tokyo => ColorScheme::Synthwave,
+            ColorScheme::Synthwave => ColorScheme::Coffee,
+            ColorScheme::Coffee => ColorScheme::Nature,
+            ColorScheme::Nature => ColorScheme::Default,
         }
     }
 
@@ -138,6 +158,51 @@ impl ColorScheme {
             ColorScheme::Candy => (Color::Rgb(255, 192, 203), Color::Black, Color::Rgb(127, 255, 212)),
             ColorScheme::Earth => (Color::Rgb(139, 69, 19), Color::White, Color::Rgb(34, 139, 34)),
             ColorScheme::Midnight => (Color::Rgb(25, 25, 112), Color::White, Color::Rgb(138, 43, 226)),
+            ColorScheme::Matrix => (Color::Black, Color::Rgb(0, 255, 0), Color::Rgb(0, 200, 0)),
+            ColorScheme::Nordic => (Color::Rgb(46, 52, 64), Color::Rgb(216, 222, 233), Color::Rgb(94, 129, 172)),
+            ColorScheme::Dracula => (Color::Rgb(40, 42, 54), Color::Rgb(248, 248, 242), Color::Rgb(255, 121, 198)),
+            ColorScheme::Solarized => (Color::Rgb(0, 43, 54), Color::Rgb(131, 148, 150), Color::Rgb(181, 137, 0)),
+            ColorScheme::Monokai => (Color::Rgb(39, 40, 34), Color::Rgb(248, 248, 242), Color::Rgb(249, 38, 114)),
+            ColorScheme::Gruvbox => (Color::Rgb(40, 40, 40), Color::Rgb(235, 219, 178), Color::Rgb(251, 73, 52)),
+            ColorScheme::Tokyo => (Color::Rgb(26, 27, 38), Color::Rgb(169, 177, 214), Color::Rgb(187, 154, 247)),
+            ColorScheme::Synthwave => (Color::Rgb(39, 23, 64), Color::Rgb(255, 236, 255), Color::Rgb(255, 82, 197)),
+            ColorScheme::Coffee => (Color::Rgb(59, 35, 20), Color::Rgb(237, 221, 185), Color::Rgb(191, 128, 64)),
+            ColorScheme::Nature => (Color::Rgb(42, 61, 44), Color::Rgb(233, 237, 201), Color::Rgb(139, 189, 139)),
+        }
+    }
+
+    fn display_name(&self) -> &str {
+        match self {
+            ColorScheme::Default => "Default",
+            ColorScheme::Dark => "Dark",
+            ColorScheme::Light => "Light",
+            ColorScheme::Ocean => "Ocean",
+            ColorScheme::Forest => "Forest",
+            ColorScheme::Sunset => "Sunset",
+            ColorScheme::Neon => "Neon",
+            ColorScheme::Pastel => "Pastel",
+            ColorScheme::Monochrome => "Monochrome",
+            ColorScheme::Autumn => "Autumn",
+            ColorScheme::Winter => "Winter",
+            ColorScheme::Spring => "Spring",
+            ColorScheme::Summer => "Summer",
+            ColorScheme::Cyberpunk => "Cyberpunk",
+            ColorScheme::Retro => "Retro",
+            ColorScheme::Desert => "Desert",
+            ColorScheme::Space => "Space",
+            ColorScheme::Candy => "Candy",
+            ColorScheme::Earth => "Earth",
+            ColorScheme::Midnight => "Midnight",
+            ColorScheme::Matrix => "Matrix",
+            ColorScheme::Nordic => "Nordic",
+            ColorScheme::Dracula => "Dracula",
+            ColorScheme::Solarized => "Solarized",
+            ColorScheme::Monokai => "Monokai",
+            ColorScheme::Gruvbox => "Gruvbox",
+            ColorScheme::Tokyo => "Tokyo Night",
+            ColorScheme::Synthwave => "Synthwave",
+            ColorScheme::Coffee => "Coffee",
+            ColorScheme::Nature => "Nature",
         }
     }
 }
@@ -160,7 +225,7 @@ enum InputAction {
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>, Box<dyn std::error::Error>> {
     enable_raw_mode()?;
     let mut stdout = stdout();
-    execute!(stdout, EnterAlternateScreen, Hide)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture, Hide)?;
     let backend = CrosstermBackend::new(stdout);
     let terminal = Terminal::new(backend)?;
     Ok(terminal)
@@ -280,8 +345,8 @@ fn draw_help_screen<B: Backend>(f: &mut Frame<B>, color_scheme: &ColorScheme) {
         Line::from("Linux Toolbox Help"),
         Line::from(""),
         Line::from("Navigation:"),
-        Line::from("↑↓: Move selection"),
-        Line::from("Enter: Select/Run program"),
+        Line::from("↑↓ or Mouse Wheel: Move selection"),
+        Line::from("Mouse Click or Enter: Select/Run program"),
         Line::from("Esc/Backspace: Go back"),
         Line::from(""),
         Line::from("Shortcuts:"),
@@ -512,7 +577,7 @@ fn draw_ui<B: Backend>(
         ].as_ref())
         .split(size);
 
-    // Title
+    // Modified title section
     let current_date = Local::now().format("%Y-%m-%d").to_string();
     let mut title_text = vec![
         Line::from(vec![
@@ -522,6 +587,8 @@ fn draw_ui<B: Backend>(
             Span::styled("Tech Logicals", Style::default().fg(Color::Green).add_modifier(Modifier::ITALIC)),
             Span::raw(" | "),
             Span::styled(current_date, Style::default().fg(Color::Magenta)),
+            Span::raw(" | Theme: "),
+            Span::styled(color_scheme.display_name(), Style::default().fg(Color::Cyan)),
         ]),
     ];
 
@@ -603,9 +670,9 @@ fn draw_ui<B: Backend>(
 
     // Help text
     let help_text = match menu_state {
-        MenuState::Categories => "↑↓: Navigate | Enter: Select | /: Search | Tab: Change Color | h: Help | i: System Info | q: Quit",
-        MenuState::Programs => "↑↓: Navigate | Enter: Run | Esc/Backspace: Back | /: Search | f: Favorite | h: Help | i: System Info | q: Quit",
-        MenuState::Search => "Type to search | Enter: Select | Esc: Cancel | Tab: Change Color | h: Help | i: System Info",
+        MenuState::Categories => "Mouse/↑↓: Move | Enter/Click: Select | /: Search | Tab: Theme | h: Help | i: Info | q: Quit | 1-9: Quick Select",
+        MenuState::Programs => "Mouse/↑↓: Move | Enter/Click: Run | Esc: Back | f: Favorite | /: Search | h: Help | i: Info | q: Quit",
+        MenuState::Search => "Type to search | Enter/Click: Select | Esc: Cancel | Tab: Theme | h: Help | i: Info",
         MenuState::Help => "Press 'h' or Esc to return",
         MenuState::SystemInfo => "Press 'i' or Esc to return",
     };
@@ -776,6 +843,10 @@ fn get_random_quote() -> &'static str {
     LINUX_QUOTES.choose(&mut rand::thread_rng()).unwrap_or(&"No quote available")
 }
 
+fn is_within_rect(x: u16, y: u16, rect: Rect) -> bool {
+    x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting program. Current version: {}", CURRENT_VERSION);
     log_action("Program started");
@@ -920,12 +991,137 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+        } else if let Event::Mouse(mouse_event) = event::read()? {
+            match mouse_event.kind {
+                MouseEventKind::Down(_) => {
+                    let mouse_x = mouse_event.column;
+                    let mouse_y = mouse_event.row;
+
+                    // Get the layout chunks (you'll need to make these accessible)
+                    let size = terminal.size()?;
+                    let chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([
+                            Constraint::Length(3),  // Title
+                            Constraint::Length(3),  // Search bar
+                            Constraint::Min(10),    // Main content
+                            Constraint::Length(3),  // OS info
+                            Constraint::Length(3),  // Help text
+                            Constraint::Length(3),  // Quote
+                        ].as_ref())
+                        .split(size);
+
+                    let main_chunks = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([
+                            Constraint::Percentage(40),
+                            Constraint::Percentage(60)
+                        ].as_ref())
+                        .split(chunks[2]);
+
+                    // Handle clicks in categories list
+                    if is_within_rect(mouse_x, mouse_y, main_chunks[0]) {
+                        let relative_y = mouse_y - main_chunks[0].y - 1; // -1 for border
+                        if relative_y < categories.len() as u16 {
+                            selected_category = relative_y as usize;
+                            category_state.select(Some(selected_category));
+                            if menu_state == MenuState::Categories {
+                                menu_state = MenuState::Programs;
+                                selected_program = 0;
+                                program_state.select(Some(0));
+                            }
+                        }
+                    }
+                    // Handle clicks in programs list
+                    else if is_within_rect(mouse_x, mouse_y, main_chunks[1]) {
+                        let relative_y = mouse_y - main_chunks[1].y - 1; // -1 for border
+                        let programs = if menu_state == MenuState::Search {
+                            filtered_programs.len()
+                        } else {
+                            categories[selected_category].programs.len()
+                        };
+                        
+                        if relative_y < programs as u16 {
+                            selected_program = relative_y as usize;
+                            program_state.select(Some(selected_program));
+                            
+                            // Double click to run program
+                            if mouse_event.kind == MouseEventKind::Down(event::MouseButton::Left) {
+                                let script = match menu_state {
+                                    MenuState::Programs => &categories[selected_category].programs[selected_program].script,
+                                    MenuState::Search => &filtered_programs[selected_program].2,
+                                    _ => continue,
+                                };
+                                
+                                // Run the script
+                                match run_script(script) {
+                                    Ok(_) => {
+                                        app_state.status_message = Some("Script executed successfully".to_string());
+                                        log_action(&format!("Script executed: {:?}", script));
+                                    },
+                                    Err(e) => {
+                                        app_state.status_message = Some(format!("Error running script: {}", e));
+                                        log_action(&format!("Error running script: {:?} - {}", script, e));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                MouseEventKind::ScrollDown => {
+                    match menu_state {
+                        MenuState::Categories => {
+                            if selected_category < categories.len() - 1 {
+                                selected_category += 1;
+                                category_state.select(Some(selected_category));
+                            }
+                        },
+                        MenuState::Programs => {
+                            let max_programs = categories[selected_category].programs.len();
+                            if selected_program < max_programs - 1 {
+                                selected_program += 1;
+                                program_state.select(Some(selected_program));
+                            }
+                        },
+                        MenuState::Search => {
+                            if selected_program < filtered_programs.len() - 1 {
+                                selected_program += 1;
+                                program_state.select(Some(selected_program));
+                            }
+                        },
+                        _ => {}
+                    }
+                },
+                MouseEventKind::ScrollUp => {
+                    match menu_state {
+                        MenuState::Categories => {
+                            if selected_category > 0 {
+                                selected_category -= 1;
+                                category_state.select(Some(selected_category));
+                            }
+                        },
+                        MenuState::Programs | MenuState::Search => {
+                            if selected_program > 0 {
+                                selected_program -= 1;
+                                program_state.select(Some(selected_program));
+                            }
+                        },
+                        _ => {}
+                    }
+                },
+                _ => {}
+            }
         }
     }
 
     // Cleanup
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, Show)?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture,
+        Show
+    )?;
 
     Ok(())
 }
